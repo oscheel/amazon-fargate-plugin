@@ -1,0 +1,16 @@
+
+# INTELLIJ
+.idea/
+*.iml
+
+# MAVEN
+target/
+work/
+
+
+# Eclipse
+bin/
+.classpath
+.project
+.settings/
+pom.xml.versionsBackup

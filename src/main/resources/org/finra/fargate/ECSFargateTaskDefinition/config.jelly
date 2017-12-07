@@ -1,0 +1,189 @@
+<?jelly escape-by-default='true'?>
+<!--
+  ~ The MIT License
+  ~
+  ~  Copyright (c) 2015, CloudBees, Inc.
+  ~
+  ~  Permission is hereby granted, free of charge, to any person obtaining a copy
+  ~  of this software and associated documentation files (the "Software"), to deal
+  ~  in the Software without restriction, including without limitation the rights
+  ~  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  ~  copies of the Software, and to permit persons to whom the Software is
+  ~  furnished to do so, subject to the following conditions:
+  ~
+  ~  The above copyright notice and this permission notice shall be included in
+  ~  all copies or substantial portions of the Software.
+  ~
+  ~  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  ~  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  ~  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  ~  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  ~  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  ~  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  ~  THE SOFTWARE.
+  ~
+
+      private String name;
+    private String roleArn;
+    private int memory;
+    private String image;
+    private String remoteFSRoot;
+    private boolean priviledged;
+
+    @CheckForNull
+    private String logDriver;
+    private List<LogDriverOption> logDriverOptions;
+    @CheckForNull
+    private String jvmArgs;
+    private List<MountPointEntry> mountPoints;
+    private boolean privileged;
+
+    private List<EnvironmentEntry> environments;
+    private List<ExtraHostEntry> extraHosts;
+    private String entryPoint;
+  -->
+
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+    <f:entry title="Name" field="name">
+        <f:textbox />
+    </f:entry>
+    <f:entry title="${%Docker Image}" field="image">
+        <f:textbox default="jenkinsci/jnlp-slave" />
+    </f:entry>
+    <f:entry title="${%Filesystem root}" field="remoteFSRoot">
+        <f:textbox default="/home/jenkins" />
+    </f:entry>
+    <f:entry title="${%Total Memory in GB}" field="memory">
+        <f:select default="0.5"/>
+    </f:entry>
+    <f:entry title="${%vCPU}" field="cpu">
+        <f:select/>
+    </f:entry>
+    <f:entry title="${%Execution Role Arn}" field="roleArn">
+        <f:textbox />
+    </f:entry>
+    <f:entry title="${%VPC}" field="vpc">
+        <f:select default="empty" />
+    </f:entry>
+    <f:entry title="${%Security Groups}" field="securityGroups">
+        <f:textbox/>
+    </f:entry>
+    <f:entry title="${%Subnets}" field="subnets">
+        <f:repeatable field="subnets" minimum="1">
+            <table width="100%">
+                <f:entry title="${%Name}" field="name">
+                    <f:select />
+                </f:entry>
+                <f:entry>
+                    <div align="right">
+                        <f:repeatableDeleteButton />
+                    </div>
+                </f:entry>
+            </table>
+        </f:repeatable>
+    </f:entry>
+    <f:entry title="${%Security Groups}" field="securityGroups">
+        <f:repeatable field="securityGroups" minimum="1">
+            <table width="100%">
+                <f:entry title="${%Id}" field="securityGroupId">
+                    <f:select />
+                </f:entry>
+                <f:entry>
+                    <div align="right">
+                        <f:repeatableDeleteButton />
+                    </div>
+                </f:entry>
+            </table>
+        </f:repeatable>
+    </f:entry>
+
+    <f:advanced>
+
+        <f:entry title="${%Override entrypoint}" field="entrypoint">
+            <f:textbox />
+        </f:entry>
+        <f:entry title="${%JVM arguments}" field="jvmArgs">
+            <f:textbox />
+        </f:entry>
+        <f:entry title="${%Privileged}" field="privileged">
+            <f:checkbox />
+        </f:entry>
+        <f:entry title="${%Logging Driver}" field="logDriver">
+            <f:textbox />
+        </f:entry>
+        <f:entry title="${%Logging Configuration}">
+            <f:repeatable field="logDriverOptions">
+                <table width="100%">
+                    <f:entry title="${%Name}" field="name">
+                        <f:textbox />
+                    </f:entry>
+                    <f:entry title="${%Value}" field="value">
+                        <f:textbox />
+                    </f:entry>
+                    <f:entry>
+                        <div align="right">
+                            <f:repeatableDeleteButton />
+                        </div>
+                    </f:entry>
+                </table>
+            </f:repeatable>
+        </f:entry>
+        <f:entry title="${%Environments}">
+            <f:repeatable field="environments">
+                <table width="100%">
+                    <f:entry title="${%Name}" field="name">
+                        <f:textbox />
+                    </f:entry>
+                    <f:entry title="${%Value}" field="value">
+                        <f:textbox />
+                    </f:entry>
+                    <f:entry>
+                        <div align="right">
+                            <f:repeatableDeleteButton />
+                        </div>
+                    </f:entry>
+                </table>
+            </f:repeatable>
+        </f:entry>
+        <f:entry title="${%Extra Hosts}">
+            <f:repeatable field="extraHosts">
+                <table width="100%">
+                    <f:entry title="${%IP Address}" field="ipAddress">
+                        <f:textbox value="${instance.ipAddress}" />
+                    </f:entry>
+                    <f:entry title="${%Hostname}" field="hostname">
+                        <f:textbox value="${instance.hostname}" />
+                    </f:entry>
+                    <f:entry>
+                        <div align="right">
+                            <f:repeatableDeleteButton />
+                        </div>
+                    </f:entry>
+                </table>
+            </f:repeatable>
+        </f:entry>
+        <f:entry title="${%Container Mount Points}">
+            <f:repeatable field="mountPoints">
+                <table width="100%">
+                    <f:entry title="${%Name}" field="name">
+                        <f:textbox value="${instance.name}" />
+                    </f:entry>
+                    <f:entry title="${%Source Path}" field="sourcePath">
+                        <f:textbox value="${instance.sourcePath}" />
+                    </f:entry>
+                    <f:entry title="${%Container Path}" field="containerPath">
+                        <f:textbox value="${instance.containerPath}" />
+                    </f:entry>
+                    <f:entry title="${%Read Only}" field="readOnly">
+                        <f:checkbox />
+                    </f:entry>
+                    <f:entry title="">
+                        <div align="right">
+                            <f:repeatableDeleteButton />
+                        </div>
+                    </f:entry>
+                </table>
+            </f:repeatable>
+        </f:entry>
+    </f:advanced>
+</j:jelly>

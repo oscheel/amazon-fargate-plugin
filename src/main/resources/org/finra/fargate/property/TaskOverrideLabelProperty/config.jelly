@@ -1,0 +1,31 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form" xmlns:u="/util">
+    <f:optionalBlock name="on"
+                     title="${%Add ECS Task Label}"
+                     checked="${instance != null and instance.on}"
+                     inline="true">
+        <f:entry title="Name" field="taskDefinitionName">
+            <f:textbox />
+        </f:entry>
+        <f:advanced>
+            <f:entry title="Task Role" field="role">
+                <f:textbox />
+            </f:entry>
+            <f:entry title="Memory" field="memory">
+                <f:select />
+            </f:entry>
+            <f:entry title="Security Groups">
+            <f:repeatable field="securityGroups" minimum="0">
+                <table style="width:100%">
+                    <st:include page="config.jelly" class="org.finra.fargate.SecurityGroup" />
+                    <f:entry title="">
+                        <div align="right">
+                            <f:repeatableDeleteButton />
+                        </div>
+                    </f:entry>
+                </table>
+            </f:repeatable>
+            </f:entry>
+        </f:advanced>
+    </f:optionalBlock>
+</j:jelly>

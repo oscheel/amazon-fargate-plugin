@@ -1,0 +1,78 @@
+<?jelly escape-by-default='true'?>
+<!--
+  ~ The MIT License
+  ~
+  ~  Copyright (c) 2015, CloudBees, Inc.
+  ~
+  ~  Permission is hereby granted, free of charge, to any person obtaining a copy
+  ~  of this software and associated documentation files (the "Software"), to deal
+  ~  in the Software without restriction, including without limitation the rights
+  ~  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  ~  copies of the Software, and to permit persons to whom the Software is
+  ~  furnished to do so, subject to the following conditions:
+  ~
+  ~  The above copyright notice and this permission notice shall be included in
+  ~  all copies or substantial portions of the Software.
+  ~
+  ~  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  ~  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  ~  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  ~  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  ~  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  ~  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  ~  THE SOFTWARE.
+  ~
+  -->
+
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form" xmlns:c="/lib/credentials">
+
+
+    <f:section title="ECS Cluster">
+        <f:entry field="name" title="${%Name}" >
+            <f:textbox />
+        </f:entry>
+
+        <f:entry field="credentialId" title="${%Amazon ECS Credentials}" description="AWS IAM Access Key used to connect to ECS. If not specified, implicit authentication mechanisms are used (IAM roles...)">
+            <c:select />
+        </f:entry>
+
+        <f:entry field="region" title="${%Amazon ECS Region Name}" description="AWS regionName for ECS. If not specified, use us-east-1.">
+            <f:select />
+        </f:entry>
+
+        <f:entry field="clusterArn" title="${%ECS Cluster}">
+            <f:select />
+        </f:entry>
+
+        <f:advanced>
+            <f:entry field="tunnel" title="${%Tunnel connection through}" help="/help/system-config/master-slave/jnlp-tunnel.html">
+                <f:textbox />
+            </f:entry>
+        </f:advanced>
+
+       <f:entry title="${%Templates}">
+           <f:repeatable field="taskDefinitionList" minimum="0">
+               <table style="width:100%">
+                   <st:include page="config.jelly" class="org.finra.fargate.ECSFargateTaskDefinition" />
+                   <f:entry title="">
+                       <div align="right">
+                           <f:repeatableDeleteButton />
+                       </div>
+                   </f:entry>
+               </table>
+           </f:repeatable>
+        </f:entry>
+    </f:section>
+
+    <!--
+       private static final Logger LOGGER = Logger.getLogger(ECSCluster.class.getName());
+    private final String name;
+    private final String credentialId;
+    private final String clusterArn;
+    private final String region;
+    private final String tunnel;
+    private int maxSlaves;
+    private final List<ECSFargateTaskDefinition> taskDefinitionList;
+    -->
+
+</j:jelly>
