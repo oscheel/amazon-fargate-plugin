@@ -27,14 +27,13 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
 
     <f:section title="ECS Fargate Config">
-<!--        <j:set var="instance" value="${it}"/>-->
- <!--       <j:set var="descriptor" value="${it.descriptor}"/>-->
+        <!--        <j:set var="instance" value="${it}"/>-->
+        <j:set var="descriptor" value="${it.descriptor}"/>
 
-        ${descriptor.clazz}
-        <f:entry title="Clusters">
+     <!--    <f:entry title="Clusters"> -->
             <f:repeatable field="clusters" minimum="0" var="cluster">
                 <table style="width:100%">
-                    <st:include page="config.jelly" class="org.finra.fargate.ECSCluster" />
+                    <st:include page="config.jelly" class="ECSCluster" />
                     <f:entry title="">
                         <div align="right">
                             <f:repeatableDeleteButton />
@@ -43,7 +42,7 @@
                 </table>
             </f:repeatable>
 
-        </f:entry>
+      <!--   </f:entry> -->
 
     </f:section>
 

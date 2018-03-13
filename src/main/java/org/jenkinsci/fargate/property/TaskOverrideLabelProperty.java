@@ -1,15 +1,11 @@
-package org.finra.fargate.property;
+package org.jenkinsci.fargate.property;
 
 import hudson.Extension;
 import hudson.model.*;
-import hudson.model.labels.LabelAtomProperty;
-import hudson.model.labels.LabelAtomPropertyDescriptor;
 import hudson.util.FormValidation;
-import hudson.util.ListBoxModel;
-import org.finra.fargate.ECSCluster;
-import org.finra.fargate.ECSFargateConfig;
-import org.finra.fargate.ECSFargateTaskDefinition;
-import org.finra.fargate.SecurityGroup;
+import org.jenkinsci.fargate.ECSCluster;
+import org.jenkinsci.fargate.ECSFargateConfig;
+import org.jenkinsci.fargate.ECSFargateTaskDefinition;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
@@ -22,11 +18,11 @@ public class TaskOverrideLabelProperty extends JobProperty  {
     private final String role;
     private final int memory;
     private final int cpu;
-    private final List<SecurityGroup> securityGroups;
+    private final String securityGroups;
     private boolean on;
 
     @DataBoundConstructor
-    public TaskOverrideLabelProperty(String taskDefinitionName, String role, int memory, int cpu, List<SecurityGroup> securityGroups) {
+    public TaskOverrideLabelProperty(String taskDefinitionName, String role, int memory, int cpu,String securityGroups) {
         this.taskDefinitionName = taskDefinitionName;
         this.role = role;
         this.memory = memory;
@@ -52,7 +48,7 @@ public class TaskOverrideLabelProperty extends JobProperty  {
     }
 
 
-    public List<SecurityGroup> getSecurityGroups() {
+    public String getSecurityGroups() {
         return securityGroups;
     }
 
@@ -114,7 +110,7 @@ public class TaskOverrideLabelProperty extends JobProperty  {
 
     }
 
-    public static class SecurityGroup extends AbstractDescribableImpl<org.finra.fargate.SecurityGroup> {
+/*    public static class SecurityGroup extends AbstractDescribableImpl<org.jenkinsci.fargate.SecurityGroup> {
 
 
         private final String securityGroupId;
@@ -130,12 +126,12 @@ public class TaskOverrideLabelProperty extends JobProperty  {
 
 
         @Extension
-        public static class DescriptorImpl extends Descriptor<org.finra.fargate.SecurityGroup>{
+        public static class DescriptorImpl extends Descriptor<org.jenkinsci.fargate.SecurityGroup>{
 
             @Override
             public String getDisplayName() {
                 return "Security Group";
             }
         }
-    }
+    }*/
 }

@@ -1,4 +1,4 @@
-package org.finra.fargate;
+package org.jenkinsci.fargate;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.regions.Region;
@@ -17,7 +17,6 @@ import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
 
-import javax.annotation.CheckForNull;
 import javax.servlet.ServletException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,6 +35,8 @@ public class ECSCluster extends AbstractDescribableImpl<ECSCluster> {
     private final String region;
     private final String tunnel;
     private int maxSlaves;
+    private int slaveTimeout;
+    private int maxRetries;
     private final List<ECSFargateTaskDefinition> taskDefinitionList;
     ECSService ecsService;
 
@@ -56,8 +57,26 @@ public class ECSCluster extends AbstractDescribableImpl<ECSCluster> {
         }
     }
 
+    public int getMaxRetries() {
+        return maxRetries == 0 ? 1 : maxRetries;
+    }
+
+    @DataBoundSetter
+    public void setMaxRetries(int maxRetries) {
+        this.maxRetries = maxRetries;
+    }
+
     public int getMaxSlaves() {
         return maxSlaves;
+    }
+
+    public int getSlaveTimeout() {
+        return slaveTimeout == 0 ? 500 : slaveTimeout;
+    }
+
+    @DataBoundSetter
+    public void setSlaveTimeout(int slaveTimeout) {
+        this.slaveTimeout = slaveTimeout;
     }
 
     @DataBoundSetter
@@ -87,6 +106,10 @@ public class ECSCluster extends AbstractDescribableImpl<ECSCluster> {
 
     public List<ECSFargateTaskDefinition> getTaskDefinitionList() {
         return taskDefinitionList;
+    }
+
+    public ECSService getEcsService(){
+        return new ECSService(credentialId,region);
     }
 
     public ECSFargateTaskDefinition getTemplateWithName(String name){

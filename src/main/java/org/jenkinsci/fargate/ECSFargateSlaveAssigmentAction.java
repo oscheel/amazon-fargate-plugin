@@ -1,4 +1,4 @@
-package org.finra.fargate;
+package org.jenkinsci.fargate;
 
 import hudson.model.InvisibleAction;
 import hudson.model.Label;
@@ -8,6 +8,9 @@ import hudson.model.queue.SubTask;
 /**
  *  This action is added to a task so that it forces it to run on a specific node. Used by {@link ECSFargateProvisioner} to launch a slave and
  *  then map it to the task in question.
+ *
+ *
+ *  @Deprecated - No longer needed with the implementation of one-shot-executor.
  */
 public class ECSFargateSlaveAssigmentAction extends InvisibleAction implements LabelAssignmentAction {
 

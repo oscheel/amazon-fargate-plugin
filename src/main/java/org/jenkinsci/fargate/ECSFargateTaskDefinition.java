@@ -1,4 +1,4 @@
-package org.finra.fargate;
+package org.jenkinsci.fargate;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.ec2.model.Subnet;
@@ -24,7 +24,8 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
 
     private static Logger LOG = Logger.getLogger(ECSFargateTaskDefinition.class.getName());
     private String name;
-    private String roleArn;
+    private String executionRoleArn;
+    private String taskRoleArn;
     private String memory;
     private String image;
     private String cpu;
@@ -42,13 +43,14 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
     private List<ExtraHostEntry> extraHosts;
     private String entryPoint;
     private String vpc;
-    private List<Subnet> subnets;
+    private String subnets;
     private String securityGroups;
 
     @DataBoundConstructor
-    public ECSFargateTaskDefinition(String name, String roleArn, String memory,String cpu, String image, String remoteFSRoot, boolean priviledged, String logDriver, List<LogDriverOption> logDriverOptions, String jvmArgs, List<MountPointEntry> mountPoints, boolean privileged, List<EnvironmentEntry> environments, List<ExtraHostEntry> extraHosts, String entryPoint) {
+    public ECSFargateTaskDefinition(String name, String executionRoleArn, String memory,String cpu, String image, String remoteFSRoot, boolean priviledged, String logDriver, List<LogDriverOption> logDriverOptions, String jvmArgs, List<MountPointEntry> mountPoints, boolean privileged, List<EnvironmentEntry> environments, List<ExtraHostEntry> extraHosts, String entryPoint) {
         this.name = name;
-        this.roleArn = roleArn;
+        this.executionRoleArn = executionRoleArn;
+        this.taskRoleArn = taskRoleArn;
         this.memory = memory;
         this.image = image;
         this.remoteFSRoot = remoteFSRoot;
@@ -62,6 +64,15 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
         this.extraHosts = extraHosts;
         this.entryPoint = entryPoint;
         this.cpu=cpu;
+    }
+
+    public String getTaskRoleArn() {
+        return taskRoleArn;
+    }
+
+    @DataBoundSetter
+    public void setTaskRoleArn(String taskRoleArn) {
+        this.taskRoleArn = taskRoleArn;
     }
 
     public String getSecurityGroups() {
@@ -83,12 +94,12 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
     }
 
 
-    public List<Subnet> getSubnets() {
+    public String getSubnets() {
         return subnets;
     }
 
     @DataBoundSetter
-    public void setSubnets(List<Subnet> subnets) {
+    public void setSubnets(String subnets) {
         this.subnets = subnets;
     }
 
@@ -106,8 +117,8 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
         return name;
     }
 
-    public String getRoleArn() {
-        return roleArn;
+    public String getExecutionRoleArn() {
+        return executionRoleArn;
     }
 
     public String getMemory() {
@@ -150,30 +161,102 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
         }
 
 
-        public FormValidation doCheckSecurityGroups(@QueryParameter String securityGroups,
-                                                    @RelativePath("..")@QueryParameter String credentialId,
-                                                    @RelativePath("..")@QueryParameter String region,
-                                                    @QueryParameter String vpc){
 
-            //Allow a max of 5 security Groups.
-            String securityGroupsPattern = "((sg-)[a-zA-Z0-9]{8}(,){0,1}){1,5}";
+        public FormValidation doTestSubnets(@RelativePath("..")@QueryParameter String vpc, @RelativePath("../..") @QueryParameter String credentialId,  @RelativePath("../..") @QueryParameter String region, @QueryParameter String subnets){
+
+            if(StringUtils.isEmpty(vpc) || StringUtils.isEmpty(credentialId) || StringUtils.isEmpty(region) || StringUtils.isEmpty(subnets)){
+                return FormValidation.error("VPC, credentials, region or subnets have not been entered. Please enter these fields to continue.");
+            }
+            EC2Service ec2Service = new EC2Service(credentialId,region);
+            try {
+                String[] subnetArray = subnets.split(",");
+
+                if(subnetArray.length > 1 ){
+
+                    Set<String> subnetIds = new HashSet<String>();
+                    for(Subnet subnet : ec2Service.describeSubnets(vpc)){
+                        subnetIds.add(subnet.getSubnetId());
+                    }
+
+                    for(String subnet : subnetArray){
+                        if(!subnetIds.contains(subnet)){
+                            return FormValidation.error("Cannot find subnet "+subnet+" in the list of subnets for this vpc. The full list of subnets are "+subnetIds);
+                        }
+                    }
+                }
+
+                return FormValidation.ok("Subnets validated successfully.");
+            } catch (Exception e) {
+                LOG.log(Level.INFO, "Exception searching clusters for credentials=" + credentialId + ", regionName=" + region + ":" + e);
+                return FormValidation.error(e,"A problem occured while running this validation.");
+            }
+        }
+
+        /**
+         *
+         * @param subnets
+         * @return
+         */
+        public FormValidation doCheckSubnets(@QueryParameter String subnets){
+            String subnetPattern = "((subnet-)[a-zA-Z0-9]{8}(,){0,1})+";
+            if(StringUtils.isEmpty(subnets) || !subnets.matches(subnetPattern)){
+                return FormValidation.error("One or more of the subnets entered is/are invalid. Please see the help option of this field for more information.");
+            }
+            return FormValidation.ok();
+        }
+
+        /**
+         *
+         * @param securityGroups
+         * @param credentialId
+         * @param region
+         * @param vpc
+         */
+        public FormValidation doTestSecurityGroups(@QueryParameter String securityGroups,
+                                                   @RelativePath("../..")@QueryParameter String credentialId,
+                                                   @RelativePath("../..")@QueryParameter String region,
+                                                   @RelativePath("..")@QueryParameter String vpc){
 
             if(StringUtils.isEmpty(credentialId) || StringUtils.isEmpty(region) || StringUtils.isEmpty(vpc) || StringUtils.isEmpty(securityGroups)){
-                return FormValidation.error("Please select a credential, a vpc and a region to proceed.");
+                return FormValidation.error("VPC, credentials, region or security groups have not been entered. Please enter these fields to continue.");
             }
 
             EC2Service ec2Service = new EC2Service(credentialId,region);
 
+            try{
+                String[] securityGroupTokens = securityGroups.split(",");
+                List<com.amazonaws.services.ec2.model.SecurityGroup> groupList = ec2Service.describeSecurityGroups(securityGroupTokens,vpc);
+                Set<String> sgIds = new HashSet<String>();
 
-            String[] securityGroupTokens = securityGroups.split(",");
-            List<com.amazonaws.services.ec2.model.SecurityGroup> groupList = ec2Service.describeSecurityGroups(securityGroupTokens,vpc);
+                for(com.amazonaws.services.ec2.model.SecurityGroup sg : groupList){
+                    sgIds.add(sg.getGroupId());
+                }
 
-            if(groupList == null || groupList.size() < 0){
-                return FormValidation.error("Unable to validate security groups, please ensure the groups are valid and belong to the selected vpc.");
+                for(String sg : securityGroupTokens){
+                    if(!sgIds.contains(sg)){
+                        return FormValidation.error("Did not recognize sg "+sg+". The full list of security groups found are "+sgIds);
+                    }
+                }
+
+            }catch (Exception e){
+                return FormValidation.error(e,"A problem occured while validating the security groups.");
             }
 
 
-            return FormValidation.ok("Security groups are valid and match the expected vpc.");
+
+            return FormValidation.ok("Security groups validated successfully.");
+
+        }
+
+        public FormValidation doCheckSecurityGroups(@QueryParameter String securityGroups){
+
+            //Allow a max of 5 security Groups.
+            String securityGroupsPattern = "((sg-)[a-zA-Z0-9]{8}(,){0,1})+";
+            if(StringUtils.isEmpty(securityGroups) || !securityGroups.matches(securityGroupsPattern)){
+                return FormValidation.error("One or more of the security groups entered is/are invalid. Please see the help option of this field for more information.");
+            }
+            return FormValidation.ok();
+
         }
 
         public ListBoxModel doFillVpcItems(@RelativePath("..")@QueryParameter String credentialId, @RelativePath("..")@QueryParameter String region){
@@ -260,7 +343,7 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
 
 
     }
-
+/*
     public static class SecurityGroup extends AbstractDescribableImpl<SecurityGroup>{
         private final String securityGroupId;
 
@@ -282,7 +365,7 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
                 return "Security Group";
             }
 
-  /*          public ListBoxModel doFillSecurityGroupIdItems(@RelativePath("..")@QueryParameter String vpc, @RelativePath("../..") @QueryParameter String credentialId,  @RelativePath("../..") @QueryParameter String region){
+  *//*          public ListBoxModel doFillSecurityGroupIdItems(@RelativePath("..")@QueryParameter String vpc, @RelativePath("../..") @QueryParameter String credentialId,  @RelativePath("../..") @QueryParameter String region){
                 ListBoxModel listBoxModel = new ListBoxModel();
                 EC2Service ec2Service = new EC2Service(credentialId,region);
                 try {
@@ -302,11 +385,11 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
                 }
                 return listBoxModel;
             }
-*/
+*//*
         }
-    }
+    }*/
 
-    public static class Subnet extends AbstractDescribableImpl<Subnet>{
+/*    public static class Subnet extends AbstractDescribableImpl<Subnet>{
         private final String name;
 
         @DataBoundConstructor
@@ -350,7 +433,7 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
             }
 
         }
-    }
+    }*/
 
     public static class LogDriverOption extends AbstractDescribableImpl<LogDriverOption> {
         public String name, value;

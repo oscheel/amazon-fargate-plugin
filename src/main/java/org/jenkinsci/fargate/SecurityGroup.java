@@ -1,4 +1,5 @@
-package org.finra.fargate;
+package org.jenkinsci.fargate;
+/*
 
 import hudson.Extension;
 import hudson.model.AbstractDescribableImpl;
@@ -31,3 +32,4 @@ public class SecurityGroup extends AbstractDescribableImpl<SecurityGroup> {
 
     }
 }
+*/

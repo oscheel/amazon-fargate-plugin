@@ -1,19 +1,14 @@
-package org.finra.fargate;
+package org.jenkinsci.fargate;
 
 import hudson.Extension;
-import hudson.Plugin;
-import hudson.model.Describable;
-import hudson.model.Descriptor;
 import jenkins.model.GlobalConfiguration;
-import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
-import org.kohsuke.stapler.DataBoundConstructor;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.StaplerRequest;
 
 import javax.annotation.CheckForNull;
-import javax.servlet.ServletException;
-import java.io.IOException;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,12 +48,12 @@ public class ECSFargateConfig extends GlobalConfiguration {
     }
 
     @CheckForNull
-    public ECSFargateTaskDefinition getTemplate(String templateName){
+    public Pair<ECSCluster,ECSFargateTaskDefinition> getTemplate(String templateName){
         if(clusters != null){
             for(ECSCluster ecsCluster : clusters){
                 ECSFargateTaskDefinition ecsFargateTaskDefinition = ecsCluster.getTemplateWithName(templateName);
                 if(ecsFargateTaskDefinition != null){
-                    return ecsFargateTaskDefinition;
+                    return new ImmutablePair<ECSCluster,ECSFargateTaskDefinition>(ecsCluster,ecsFargateTaskDefinition);
                 }
             }
         }

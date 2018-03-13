@@ -1,19 +1,22 @@
-package org.finra.fargate;
+package org.jenkinsci.fargate;
 
+import com.amazonaws.services.dynamodbv2.xspec.L;
 import hudson.Extension;
 import hudson.model.AbstractProject;
 import hudson.model.Node;
 import hudson.model.Queue;
 import hudson.model.Slave;
 import hudson.model.queue.QueueListener;
-import hudson.model.queue.QueueTaskDispatcher;
 import hudson.security.ACL;
 import hudson.remoting.Callable;
 import jenkins.model.Jenkins;
 import org.apache.commons.lang.exception.ExceptionUtils;
-import org.finra.fargate.property.TaskOverrideLabelProperty;
+import org.apache.commons.lang3.tuple.Pair;
+import org.jenkinsci.fargate.property.TaskOverrideLabelProperty;
+import org.jenkinsci.plugins.oneshot.OneShotProvisioner;
 import org.jenkinsci.remoting.RoleChecker;
 
+import javax.annotation.Nonnull;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -23,11 +26,12 @@ import java.util.logging.Logger;
  *  task definition to include things like memory, role, security groups, etc...
  */
 @Extension
-public class ECSFargateProvisioner extends QueueListener {
+public class ECSFargateProvisioner extends OneShotProvisioner<ECSFargateSlave> {
 
     private static Logger LOG = Logger.getLogger(ECSFargateProvisioner.class.getName());
+/*
 
-    @Override
+   // @Override
     public void onEnterBuildable(Queue.BuildableItem bi) {
         if(bi.task instanceof AbstractProject){
 
@@ -45,7 +49,6 @@ public class ECSFargateProvisioner extends QueueListener {
                 }
                // Queue.getInstance().cancel(bi);
                 if(taskDefinition != null) {
-
 
                     try {
                         Node node = ACL.impersonate(ACL.SYSTEM, new Callable<Node, Exception>() {
@@ -74,11 +77,41 @@ public class ECSFargateProvisioner extends QueueListener {
                     }
                 }
             }
-            LOG.log(Level.INFO,"Task {0} entered runnable state.",project);
-/*            if(bi.getAction(ECSFargateSlaveAssigmentAction.class) == null){
-                bi.addAction(new ECSFargateSlaveAssigmentAction("master"));
-            }*/
-
         }
+    }
+*/
+
+    @Override
+    public boolean usesOneShotExecutor(Queue.Item item) {
+
+        LOG.log(Level.FINE,"Checking {0} to see if we can provision a fargate task.");
+        ECSFargateConfig ecsFargateConfig = ECSFargateConfig.getEcsFargateConfig();
+        if( item.getAssignedLabel() != null &&
+                item.getAssignedLabel().isAtom() &&
+                        ecsFargateConfig.getTemplate(item.getAssignedLabel().toString()) != null){
+
+            LOG.log(Level.FINE,"This project uses a fargate label {0}."+item.getAssignedLabel());
+            return true;
+        }
+
+        return false;
+    }
+
+    @Override
+    public boolean canRun(Queue.Item item) {
+        return true;
+    }
+
+    @Nonnull
+    @Override
+    public ECSFargateSlave prepareExecutorFor(Queue.BuildableItem buildableItem) throws Exception {
+
+        ECSFargateConfig ecsFargateConfig = ECSFargateConfig.getEcsFargateConfig();
+        Pair<ECSCluster,ECSFargateTaskDefinition> taskDefinition = ecsFargateConfig.getTemplate(buildableItem.getAssignedLabel().toString());
+        if(taskDefinition == null) {
+            throw new RuntimeException("Unable to find template for "+buildableItem.getAssignedLabel().toString());
+        }
+
+        return  new ECSFargateSlave(buildableItem,"ECS Fargate Node.",taskDefinition.getValue().getRemoteFSRoot());
     }
 }

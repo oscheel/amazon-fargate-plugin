@@ -1,11 +1,9 @@
-package org.finra.fargate;
+package org.jenkinsci.fargate;
 
 
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Deque;
-import java.util.LinkedList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -107,9 +105,9 @@ class ECSService {
                 .withEnvironment(definition.getEnvironmentKeyValuePairs())
                 .withExtraHosts(definition.getExtraHostEntries())
                 .withMountPoints(definition.getMountPointEntries())
-                .withMemory(memory)
+                //.withMemory(memory)
                 //Container will always use as much CPU as is available so this doesnt need to be specified unlike memory except in the task definition itself.
-                .withCpu(2)
+               // .withCpu(2)
                 .withPrivileged(definition.isPrivileged())
                 .withEssential(true);
 
@@ -160,7 +158,7 @@ class ECSService {
         TaskDefinition taskDefinition = describeTaskDefinition.getTaskDefinition();
         if(taskDefinition.getCpu().equals(Integer.toString(cpu)) &&
                 taskDefinition.getMemory().equals(Integer.toString(memory)) &&
-                taskDefinition.getExecutionRoleArn().equals(fargateTaskDefinition.getRoleArn())){
+                taskDefinition.getExecutionRoleArn().equals(fargateTaskDefinition.getExecutionRoleArn())){
             LOGGER.log(Level.FINE, "Match on task cpy, memory and execution role: template={0}, taskDefinition={1}", new Object[] {fargateTaskDefinition,taskDefinition});
 
         }else{
@@ -180,7 +178,7 @@ class ECSService {
 
         int memory = (int)(Double.parseDouble(definition.getMemory())*1024);
         int cpu = (int)(Double.parseDouble(definition.getCpu())*1024);
-        String familyName = fullQualifiedTemplateName(cluster, definition);
+        String familyName = fullQualifiedTemplateName(cluster.getName(), definition);
         final ContainerDefinition def = populateContainerDefintion(definition,familyName,memory);
 
 
@@ -200,14 +198,14 @@ class ECSService {
             describeTaskDefinition = client.describeTaskDefinition((new DescribeTaskDefinitionRequest().withTaskDefinition(listTaskDefinitions.getTaskDefinitionArns().get(0))));
         }
 
-        if(!matchesSavedDefinition(describeTaskDefinition,def,definition,memory,cpu)) {
+        if(matchesSavedDefinition(describeTaskDefinition,def,definition,memory,cpu)) {
             LOGGER.log(Level.FINE, "Task Definition already exists: {0}", new Object[]{describeTaskDefinition.getTaskDefinition().getTaskDefinitionArn()});
             return describeTaskDefinition.getTaskDefinition().getTaskDefinitionArn();
         } else {
             final RegisterTaskDefinitionRequest request = new RegisterTaskDefinitionRequest()
                     .withFamily(familyName)
                     .withRequiresCompatibilities(Compatibility.FARGATE)
-                    .withExecutionRoleArn(definition.getRoleArn())
+                    .withExecutionRoleArn(definition.getExecutionRoleArn())
                     .withNetworkMode(NetworkMode.Awsvpc)
                     .withCpu(Integer.toString(cpu))
                     .withMemory(Integer.toString(memory))
@@ -222,11 +220,11 @@ class ECSService {
         }
     }
 
-    private String fullQualifiedTemplateName(final ECSCluster cluster, final ECSFargateTaskDefinition definition) {
-        return cluster.getName().replaceAll("\\s+","") + '-' + definition.getName();
+    private String fullQualifiedTemplateName(final String cluster, final ECSFargateTaskDefinition definition) {
+        return cluster.replaceAll("\\s+","") + '-' + definition.getName();
     }
 
-    String runEcsTask(final ECSFargateSlave slave, final ECSFargateTaskDefinition template, String clusterArn, Collection<String> command, String taskDefinitionArn) throws IOException, AbortException {
+    String runEcsTask(final ECSFargateSlave slave, final ECSFargateTaskDefinition template, String clusterArn, String clusterName, Collection<String> command, String taskDefinitionArn) throws IOException, AbortException {
         AmazonECSClient client = getAmazonECSClient();
 
         KeyValuePair envNodeName = new KeyValuePair();
@@ -241,8 +239,8 @@ class ECSService {
                 .withTaskDefinition(taskDefinitionArn)
                 .withOverrides(new TaskOverride()
                         .withContainerOverrides(new ContainerOverride()
-                                .withName(slave.getNodeName())
-                               // .withName(fullQualifiedTemplateName(slave, template))
+                               // .withName(slave.getNodeName())
+                                .withName(fullQualifiedTemplateName("ecs_dev", template))
                                 .withCommand(command)
                                 .withEnvironment(envNodeName)
                                 .withEnvironment(envNodeSecret)))

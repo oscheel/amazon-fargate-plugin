@@ -1,4 +1,4 @@
-package org.finra.fargate;
+package org.jenkinsci.fargate;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.ClientConfiguration;

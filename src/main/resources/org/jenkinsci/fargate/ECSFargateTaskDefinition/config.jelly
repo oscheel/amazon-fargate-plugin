@@ -59,7 +59,10 @@
     <f:entry title="${%vCPU}" field="cpu">
         <f:select/>
     </f:entry>
-    <f:entry title="${%Execution Role Arn}" field="roleArn">
+    <f:entry title="${%Execution Role Arn}" field="executionRoleArn">
+        <f:textbox />
+    </f:entry>
+    <f:entry title="${%Task Role Arn}" field="taskRoleArn">
         <f:textbox />
     </f:entry>
     <f:entry title="${%VPC}" field="vpc">
@@ -68,21 +71,29 @@
     <f:entry title="${%Security Groups}" field="securityGroups">
         <f:textbox/>
     </f:entry>
+    <f:validateButton title="Validate SGs" method="testSecurityGroups" with="securityGroups,credentialId,vpc,region" />
+
     <f:entry title="${%Subnets}" field="subnets">
-        <f:repeatable field="subnets" minimum="1">
-            <table width="100%">
-                <f:entry title="${%Name}" field="name">
-                    <f:select />
-                </f:entry>
-                <f:entry>
-                    <div align="right">
-                        <f:repeatableDeleteButton />
-                    </div>
-                </f:entry>
-            </table>
-        </f:repeatable>
+        <f:textbox/>
     </f:entry>
-    <f:entry title="${%Security Groups}" field="securityGroups">
+    <f:validateButton title="Validate Subnets" method="testSubnets" with="subnets,credentialId,vpc,region" />
+
+        <!--   </f:entry>
+         <f:entry title="${%Subnets}" field="subnets">
+              <f:repeatable field="subnets" minimum="1">
+                  <table width="100%">
+                      <f:entry title="${%Name}" field="name">
+                          <f:select />
+                      </f:entry>
+                      <f:entry>
+                          <div align="right">
+                              <f:repeatableDeleteButton />
+                          </div>
+                      </f:entry>
+                  </table>
+              </f:repeatable>
+          </f:entry> -->
+  <!--  <f:entry title="${%Security Groups}" field="securityGroups">
         <f:repeatable field="securityGroups" minimum="1">
             <table width="100%">
                 <f:entry title="${%Id}" field="securityGroupId">
@@ -95,7 +106,7 @@
                 </f:entry>
             </table>
         </f:repeatable>
-    </f:entry>
+    </f:entry> -->
 
     <f:advanced>
 

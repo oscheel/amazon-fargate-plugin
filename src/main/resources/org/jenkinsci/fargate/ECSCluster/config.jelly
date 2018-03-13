@@ -48,12 +48,18 @@
             <f:entry field="tunnel" title="${%Tunnel connection through}" help="/help/system-config/master-slave/jnlp-tunnel.html">
                 <f:textbox />
             </f:entry>
+            <f:entry field="slaveTimeout" title="${%Slave Timeout in seconds}" >
+                <f:textbox default="500"/>
+            </f:entry>
+            <f:entry field="maxRetries" title="${%Number of retries}" >
+                <f:textbox default="1"/>
+            </f:entry>
         </f:advanced>
 
        <f:entry title="${%Templates}">
            <f:repeatable field="taskDefinitionList" minimum="0">
                <table style="width:100%">
-                   <st:include page="config.jelly" class="org.finra.fargate.ECSFargateTaskDefinition" />
+                   <st:include page="config.jelly" class="org.jenkinsci.fargate.ECSFargateTaskDefinition" />
                    <f:entry title="">
                        <div align="right">
                            <f:repeatableDeleteButton />
@@ -64,15 +70,5 @@
         </f:entry>
     </f:section>
 
-    <!--
-       private static final Logger LOGGER = Logger.getLogger(ECSCluster.class.getName());
-    private final String name;
-    private final String credentialId;
-    private final String clusterArn;
-    private final String region;
-    private final String tunnel;
-    private int maxSlaves;
-    private final List<ECSFargateTaskDefinition> taskDefinitionList;
-    -->
 
 </j:jelly>
