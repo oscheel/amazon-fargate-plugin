@@ -48,13 +48,6 @@ public class ECSCluster extends AbstractDescribableImpl<ECSCluster> {
         this.region = region;
         this.tunnel = tunnel;
         this.taskDefinitionList = taskDefinitionList;
-
-        ecsService = new ECSService(credentialId,region);
-        if(taskDefinitionList != null){
-            for(ECSFargateTaskDefinition ecsFargateTaskDefinition : taskDefinitionList){
-                ecsService.registerTemplate(this,ecsFargateTaskDefinition);
-            }
-        }
     }
 
     public int getMaxRetries() {

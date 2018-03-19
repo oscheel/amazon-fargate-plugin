@@ -97,7 +97,7 @@ class ECSService {
         }
     }
 
-    ContainerDefinition populateContainerDefintion(final ECSFargateTaskDefinition definition, String familyName, int memory){
+    ContainerDefinition populateContainerDefintion(final ECSFargateTaskDefinition definition, String familyName, int memory, int cpu){
 
         ContainerDefinition def = new ContainerDefinition()
                 .withName(familyName)
@@ -105,9 +105,8 @@ class ECSService {
                 .withEnvironment(definition.getEnvironmentKeyValuePairs())
                 .withExtraHosts(definition.getExtraHostEntries())
                 .withMountPoints(definition.getMountPointEntries())
-                //.withMemory(memory)
-                //Container will always use as much CPU as is available so this doesnt need to be specified unlike memory except in the task definition itself.
-               // .withCpu(2)
+/*                .withMemory(memory) */
+                .withCpu(0)
                 .withPrivileged(definition.isPrivileged())
                 .withEssential(true);
 
@@ -143,9 +142,12 @@ class ECSService {
             return false;
         }
 
+
         if(def.equals(describeTaskDefinition.getTaskDefinition().getContainerDefinitions().get(0))){
             LOGGER.log(Level.FINE, "Match on container defintion: template={0}; last={1}", new Object[] {def, describeTaskDefinition.getTaskDefinition().getContainerDefinitions().get(0)});
         }else{
+            LOGGER.log(Level.FINE,"Task definition container: "+describeTaskDefinition.getTaskDefinition().getContainerDefinitions().get(0));
+            LOGGER.log(Level.FINE,"Cached container def: "+def);
             return false;
         }
 
@@ -179,7 +181,7 @@ class ECSService {
         int memory = (int)(Double.parseDouble(definition.getMemory())*1024);
         int cpu = (int)(Double.parseDouble(definition.getCpu())*1024);
         String familyName = fullQualifiedTemplateName(cluster.getName(), definition);
-        final ContainerDefinition def = populateContainerDefintion(definition,familyName,memory);
+        final ContainerDefinition def = populateContainerDefintion(definition,familyName,memory,cpu);
 
 
         String lastToken = null;
@@ -224,7 +226,14 @@ class ECSService {
         return cluster.replaceAll("\\s+","") + '-' + definition.getName();
     }
 
-    String runEcsTask(final ECSFargateSlave slave, final ECSFargateTaskDefinition template, String clusterArn, String clusterName, Collection<String> command, String taskDefinitionArn) throws IOException, AbortException {
+    private NetworkConfiguration getNetworkConfig(ECSFargateTaskDefinition template){
+        return new NetworkConfiguration().withAwsvpcConfiguration(
+                    new AwsVpcConfiguration().withSubnets(template.getSubnets().split(","))
+                                             .withAssignPublicIp(AssignPublicIp.ENABLED)
+                                             .withSecurityGroups(template.getSecurityGroups().split(",")));
+    }
+
+    String runEcsTask(final ECSFargateSlave slave, final ECSFargateTaskDefinition template, String clusterArn, String clusterName, Collection<String> command, String taskDefinitionArn, String taskName) throws IOException, AbortException {
         AmazonECSClient client = getAmazonECSClient();
 
         KeyValuePair envNodeName = new KeyValuePair();
@@ -235,15 +244,24 @@ class ECSService {
         envNodeSecret.setName("SLAVE_NODE_SECRET");
         envNodeSecret.setValue(slave.getComputer().getJnlpMac());
 
+        KeyValuePair jobName = new KeyValuePair();
+        jobName.setName("TASK_NAME");
+        jobName.setValue(taskName);
+
         final RunTaskResult runTaskResult = client.runTask(new RunTaskRequest()
                 .withTaskDefinition(taskDefinitionArn)
+                .withLaunchType(LaunchType.FARGATE)
+                .withNetworkConfiguration(getNetworkConfig(template))
                 .withOverrides(new TaskOverride()
+                        .withExecutionRoleArn(template.getExecutionRoleArn())
+                        .withTaskRoleArn(template.getTaskRoleArn())
                         .withContainerOverrides(new ContainerOverride()
                                // .withName(slave.getNodeName())
-                                .withName(fullQualifiedTemplateName("ecs_dev", template))
+                                .withName(fullQualifiedTemplateName(clusterName, template))
                                 .withCommand(command)
                                 .withEnvironment(envNodeName)
-                                .withEnvironment(envNodeSecret)))
+                                .withEnvironment(envNodeSecret)
+                                .withEnvironment(jobName)))
                 .withCluster(clusterArn)
         );
 

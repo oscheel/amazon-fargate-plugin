@@ -10,8 +10,9 @@ import hudson.model.queue.SubTask;
  *  then map it to the task in question.
  *
  *
- *  @Deprecated - No longer needed with the implementation of one-shot-executor.
+ *  Deprecated - No longer needed with the implementation of one-shot-executor.
  */
+@Deprecated
 public class ECSFargateSlaveAssigmentAction extends InvisibleAction implements LabelAssignmentAction {
 
 
@@ -25,5 +26,6 @@ public class ECSFargateSlaveAssigmentAction extends InvisibleAction implements L
     public Label getAssignedLabel(SubTask task) {
         return Label.get(nodeName);
     }
+
 
 }

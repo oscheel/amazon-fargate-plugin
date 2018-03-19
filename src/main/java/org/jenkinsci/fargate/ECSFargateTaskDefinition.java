@@ -10,6 +10,7 @@ import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
+import jenkins.model.Jenkins;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.DataBoundSetter;
@@ -47,7 +48,7 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
     private String securityGroups;
 
     @DataBoundConstructor
-    public ECSFargateTaskDefinition(String name, String executionRoleArn, String memory,String cpu, String image, String remoteFSRoot, boolean priviledged, String logDriver, List<LogDriverOption> logDriverOptions, String jvmArgs, List<MountPointEntry> mountPoints, boolean privileged, List<EnvironmentEntry> environments, List<ExtraHostEntry> extraHosts, String entryPoint) {
+    public ECSFargateTaskDefinition(String name,String taskRoleArn, String executionRoleArn, String memory,String cpu, String image, String remoteFSRoot, boolean priviledged, String logDriver, List<LogDriverOption> logDriverOptions, String jvmArgs, List<MountPointEntry> mountPoints, boolean privileged, List<EnvironmentEntry> environments, List<ExtraHostEntry> extraHosts, String entryPoint) {
         this.name = name;
         this.executionRoleArn = executionRoleArn;
         this.taskRoleArn = taskRoleArn;
@@ -152,6 +153,11 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
     }
 
 
+    public static DescriptorImpl getDescriptr(){
+        return (DescriptorImpl)Jenkins.getInstance().getDescriptorOrDie(ECSFargateTaskDefinition.class);
+    }
+
+
     @Extension
     public static class DescriptorImpl extends Descriptor<ECSFargateTaskDefinition>{
 
@@ -159,6 +165,8 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
         public String getDisplayName() {
             return "Fargate Task Definition";
         }
+
+
 
 
 
@@ -259,7 +267,32 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
 
         }
 
-        public ListBoxModel doFillVpcItems(@RelativePath("..")@QueryParameter String credentialId, @RelativePath("..")@QueryParameter String region){
+        public FormValidation doTestVpc(@QueryParameter String vpc,
+                                         @RelativePath("../..")@QueryParameter String credentialId,
+                                         @RelativePath("../..")@QueryParameter String region) {
+            String vpcPattern = "vpc-[a-zA-Z0-9]{8}";
+            if (StringUtils.isEmpty(vpc) || !vpc.matches(vpcPattern)) {
+                return FormValidation.error("Invalid VPC name. It must match pattern "+vpcPattern);
+            }
+            EC2Service ec2Service = new EC2Service(credentialId, region);
+            try {
+
+                if (ec2Service.describeVpcs(vpc).size() > 0) {
+                    return FormValidation.ok("VPC validated successfully.");
+                }
+
+            } catch (Exception e) {
+                // missing credentials will throw an "AmazonClientException: Unable to load AWS credentials from any provider in the chain"
+                LOG.log(Level.INFO, "Exception searching clusters for credentials=" + credentialId + ", regionName=" + region + ":" + e);
+                LOG.log(Level.FINE, "Exception searching clusters for credentials=" + credentialId + ", regionName=" + region, e);
+                return FormValidation.error("A problem occured while validating this VPC.",e);
+
+            }
+
+            return FormValidation.error("Could not find the VPC entered. This can also be a problem with permissions");
+        }
+
+/*        public ListBoxModel doFillVpcItems(@RelativePath("..")@QueryParameter String credentialId, @RelativePath("..")@QueryParameter String region){
 
             EC2Service ec2Service = new EC2Service(credentialId,region);
             try {
@@ -280,7 +313,7 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
             }
             return new ListBoxModel();
 
-        }
+        }*/
 
         public ListBoxModel doFillMemoryItems(){
 
@@ -295,6 +328,16 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
             listBoxModel.add("6GB","6");
             listBoxModel.add("7GB","7");
             listBoxModel.add("8GB","8");
+            listBoxModel.add("9GB","9");
+            listBoxModel.add("10GB","10");
+            listBoxModel.add("11GB","11");
+            listBoxModel.add("12GB","12");
+            listBoxModel.add("13GB","13");
+            listBoxModel.add("14GB","14");
+            listBoxModel.add("15GB","15");
+            listBoxModel.add("16GB","16");
+
+
 
             return listBoxModel;
         }
@@ -316,6 +359,10 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
 
             if(d >= 4 && d<=16){
                 cpuChoices.add("2");
+            }
+
+            if(d >= 8){
+                cpuChoices.add("4");
             }
 
             return cpuChoices;
@@ -343,97 +390,6 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
 
 
     }
-/*
-    public static class SecurityGroup extends AbstractDescribableImpl<SecurityGroup>{
-        private final String securityGroupId;
-
-        public String getSecurityGroupId() {
-            return securityGroupId;
-        }
-
-        @DataBoundConstructor
-        public SecurityGroup(String securityGroupId) {
-            this.securityGroupId = securityGroupId;
-        }
-
-
-        @Extension
-        public static class DescriptorImpl extends Descriptor<SecurityGroup>{
-
-            @Override
-            public String getDisplayName() {
-                return "Security Group";
-            }
-
-  *//*          public ListBoxModel doFillSecurityGroupIdItems(@RelativePath("..")@QueryParameter String vpc, @RelativePath("../..") @QueryParameter String credentialId,  @RelativePath("../..") @QueryParameter String region){
-                ListBoxModel listBoxModel = new ListBoxModel();
-                EC2Service ec2Service = new EC2Service(credentialId,region);
-                try {
-                    final ListBoxModel options = new ListBoxModel();
-
-                    for (com.amazonaws.services.ec2.model.SecurityGroup securityGroup : ec2Service.describeSecurityGroups(vpc)) {
-                        options.add(securityGroup.getGroupName(),securityGroup.getGroupId());
-                    }
-                    return options;
-                } catch (AmazonClientException e) {
-                    // missing credentials will throw an "AmazonClientException: Unable to load AWS credentials from any provider in the chain"
-                    LOG.log(Level.INFO, "Exception searching clusters for credentials=" + credentialId + ", regionName=" + region + ":" + e);
-                    LOG.log(Level.FINE, "Exception searching clusters for credentials=" + credentialId + ", regionName=" + region, e);
-
-                } catch (RuntimeException e) {
-                    LOG.log(Level.INFO, "Exception searching VPCs for credentials=" + credentialId + ", regionName=" + region, e);
-                }
-                return listBoxModel;
-            }
-*//*
-        }
-    }*/
-
-/*    public static class Subnet extends AbstractDescribableImpl<Subnet>{
-        private final String name;
-
-        @DataBoundConstructor
-        public Subnet(String name) {
-            this.name = name;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        @Extension
-        public static class DescriptorImpl extends Descriptor<Subnet>{
-
-            @Override
-            public String getDisplayName() {
-                return this.clazz.getName();
-            }
-
-            public ListBoxModel doFillNameItems(@RelativePath("..")@QueryParameter String vpc, @RelativePath("../..") @QueryParameter String credentialId,  @RelativePath("../..") @QueryParameter String region){
-                ListBoxModel listBoxModel = new ListBoxModel();
-                EC2Service ec2Service = new EC2Service(credentialId,region);
-                try {
-                    final ListBoxModel options = new ListBoxModel();
-
-                    for (com.amazonaws.services.ec2.model.Subnet subnet : ec2Service.describeSubnets(vpc)) {
-                        options.add(subnet.getSubnetId());
-                    }
-                    return options;
-                } catch (AmazonClientException e) {
-                    // missing credentials will throw an "AmazonClientException: Unable to load AWS credentials from any provider in the chain"
-                    LOG.log(Level.INFO, "Exception searching clusters for credentials=" + credentialId + ", regionName=" + region + ":" + e);
-                    LOG.log(Level.FINE, "Exception searching clusters for credentials=" + credentialId + ", regionName=" + region, e);
-
-                } catch (RuntimeException e) {
-                    LOG.log(Level.INFO, "Exception searching VPCs for credentials=" + credentialId + ", regionName=" + region, e);
-
-                }
-                return listBoxModel;
-
-            }
-
-        }
-    }*/
 
     public static class LogDriverOption extends AbstractDescribableImpl<LogDriverOption> {
         public String name, value;

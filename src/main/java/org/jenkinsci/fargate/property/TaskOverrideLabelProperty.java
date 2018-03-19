@@ -3,6 +3,7 @@ package org.jenkinsci.fargate.property;
 import hudson.Extension;
 import hudson.model.*;
 import hudson.util.FormValidation;
+import hudson.util.ListBoxModel;
 import org.jenkinsci.fargate.ECSCluster;
 import org.jenkinsci.fargate.ECSFargateConfig;
 import org.jenkinsci.fargate.ECSFargateTaskDefinition;
@@ -14,7 +15,7 @@ import java.util.List;
 
 public class TaskOverrideLabelProperty extends JobProperty  {
 
-    private final String taskDefinitionName;
+    private final String taskRoleArn;
     private final String role;
     private final int memory;
     private final int cpu;
@@ -22,8 +23,8 @@ public class TaskOverrideLabelProperty extends JobProperty  {
     private boolean on;
 
     @DataBoundConstructor
-    public TaskOverrideLabelProperty(String taskDefinitionName, String role, int memory, int cpu,String securityGroups) {
-        this.taskDefinitionName = taskDefinitionName;
+    public TaskOverrideLabelProperty(String taskRoleArn, String role, int memory, int cpu,String securityGroups) {
+        this.taskRoleArn = taskRoleArn;
         this.role = role;
         this.memory = memory;
         this.cpu = cpu;
@@ -31,8 +32,8 @@ public class TaskOverrideLabelProperty extends JobProperty  {
     }
 
 
-    public String getTaskDefinitionName() {
-        return taskDefinitionName;
+    public String getTaskRoleArn() {
+        return taskRoleArn;
     }
 
     public String getRole() {
@@ -69,39 +70,16 @@ public class TaskOverrideLabelProperty extends JobProperty  {
             return "ECS Fargate Task";
         }
 
-        public AutoCompletionCandidates doAutoCompleteTaskDefinitionName(@QueryParameter String value){
-            ECSFargateConfig ecsFargateConfig = ECSFargateConfig.getEcsFargateConfig();
-            AutoCompletionCandidates autoCompletionCandidates = new AutoCompletionCandidates();
-
-            if(value != null && !value.isEmpty() && value.length() > 2){
-                for(ECSFargateTaskDefinition taskDefinition: ecsFargateConfig.getAllTemplates()){
-                    if(taskDefinition.getName().startsWith(value)){
-                        autoCompletionCandidates.add(taskDefinition.getName());
-                    }
-                }
-            }
 
 
-            return autoCompletionCandidates;
+        public ListBoxModel doFillMemoryItems(){
+            return  ECSFargateTaskDefinition.getDescriptr().doFillMemoryItems();
         }
 
-        public FormValidation doCheckTaskDefinitionName(@QueryParameter String taskDefinitionName){
-
-            if(taskDefinitionName == null || taskDefinitionName.isEmpty()){
-                return FormValidation.error("Please enter a template name.");
-            }
-
-            ECSFargateConfig ecsFargateConfig = ECSFargateConfig.getEcsFargateConfig();
-            for(ECSCluster cluster : ecsFargateConfig.getClusters()){
-                ECSFargateTaskDefinition taskDef = cluster.getTemplateWithName(taskDefinitionName);
-                if(taskDef != null){
-                    return FormValidation.ok("Name %s matches template in cluster %s",taskDefinitionName,cluster.getName());
-                }
-
-            }
-
-            return FormValidation.error("Name %s matches no template definition.",taskDefinitionName);
+        public ListBoxModel doFillCpuItems(@QueryParameter String memory){
+            return ECSFargateTaskDefinition.getDescriptr().doFillCpuItems(memory);
         }
+
 
         @Override
         public boolean isApplicable(Class<? extends Job> jobType) {
@@ -109,29 +87,4 @@ public class TaskOverrideLabelProperty extends JobProperty  {
         }
 
     }
-
-/*    public static class SecurityGroup extends AbstractDescribableImpl<org.jenkinsci.fargate.SecurityGroup> {
-
-
-        private final String securityGroupId;
-
-        public String getSecurityGroupId() {
-            return securityGroupId;
-        }
-
-        @DataBoundConstructor
-        public SecurityGroup(String securityGroupId) {
-            this.securityGroupId = securityGroupId;
-        }
-
-
-        @Extension
-        public static class DescriptorImpl extends Descriptor<org.jenkinsci.fargate.SecurityGroup>{
-
-            @Override
-            public String getDisplayName() {
-                return "Security Group";
-            }
-        }
-    }*/
 }

@@ -38,7 +38,7 @@ public class ECSFargateConfig extends GlobalConfiguration {
         LOGGER.log(Level.INFO,"Form data {0}",json);
         req.bindJSON(this,json);
         save();
-        //return super.configure(req, json);
+
         return super.configure(req,json);
     }
 

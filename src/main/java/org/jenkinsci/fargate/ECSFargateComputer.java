@@ -6,15 +6,20 @@ import hudson.model.TaskListener;
 import hudson.slaves.ComputerListener;
 import hudson.slaves.SlaveComputer;
 import jenkins.model.Jenkins;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jenkinsci.plugins.oneshot.OneShotComputer;
+import org.kohsuke.stapler.HttpResponse;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class ECSFargateComputer extends OneShotComputer<ECSFargateSlave> {
 
+    private Logger LOG = Logger.getLogger(ECSFargateComputer.class.getName());
     private final ECSFargateSlave ecsFargateSlave;
 
     public ECSFargateComputer(ECSFargateSlave slave) {
@@ -26,23 +31,19 @@ public class ECSFargateComputer extends OneShotComputer<ECSFargateSlave> {
         return ecsFargateSlave;
     }
 
-    /**
-     *
-     * Add logic to terminate ECS task here before node is officially removed.
-     * @param listener
-     * @throws Exception
-     */
+    @Override
+    public Charset getDefaultCharset() {
+        return super.getDefaultCharset() == null ? Charset.defaultCharset() : super.getDefaultCharset();
+    }
+
+
     @Override
     protected void terminate(TaskListener listener) throws Exception {
-        super.terminate(listener);
-        ECSFargateConfig ecsFargateConfig = ECSFargateConfig.getEcsFargateConfig();
-        Pair<ECSCluster,ECSFargateTaskDefinition> clusterToDefPair = ecsFargateConfig.getTemplate(ecsFargateSlave.getTemplateLabel());
-
-        if(clusterToDefPair != null){
-            ECSCluster ecsCluster = clusterToDefPair.getKey();
-
-            ECSService ecsService = new ECSService(ecsCluster.getCredentialId(),ecsCluster.getRegion());
-            ecsService.deleteTask(ecsCluster.getClusterArn(),ecsFargateSlave.getTaskArn());
+        if(!StringUtils.isEmpty(ecsFargateSlave.getTaskArn())){
+            getEcsFargateSlave().getECSService().deleteTask(getEcsFargateSlave().getClusterArn(),ecsFargateSlave.getTaskArn());
+        }else{
+            LOG.log(Level.WARNING,"Slave was terminated before task was assigned {0}",ecsFargateSlave.getNodeName());
         }
     }
+
 }

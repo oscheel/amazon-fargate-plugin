@@ -72,11 +72,15 @@ class EC2Service {
         return client;
     }
 
-    List<Vpc> describeVpcs(){
+
+
+    List<Vpc> describeVpcs(String vpc){
         try {
             final AmazonEC2 client = getAmazonEc2();
 
-            return client.describeVpcs().getVpcs();
+            if(StringUtils.isEmpty(vpc))
+                return client.describeVpcs().getVpcs();
+            return client.describeVpcs().withVpcs(new Vpc().withVpcId(vpc)).getVpcs();
         } catch (AmazonClientException e) {
             // missing credentials will throw an "AmazonClientException: Unable to load AWS credentials from any provider in the chain"
             LOG.log(Level.INFO, "Exception searching VPCs for credentials=" + credentialId + ", regionName=" + region + ":" + e);

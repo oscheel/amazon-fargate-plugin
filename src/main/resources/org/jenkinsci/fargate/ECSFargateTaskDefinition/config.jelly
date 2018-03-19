@@ -22,25 +22,6 @@
   ~  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
   ~  THE SOFTWARE.
   ~
-
-      private String name;
-    private String roleArn;
-    private int memory;
-    private String image;
-    private String remoteFSRoot;
-    private boolean priviledged;
-
-    @CheckForNull
-    private String logDriver;
-    private List<LogDriverOption> logDriverOptions;
-    @CheckForNull
-    private String jvmArgs;
-    private List<MountPointEntry> mountPoints;
-    private boolean privileged;
-
-    private List<EnvironmentEntry> environments;
-    private List<ExtraHostEntry> extraHosts;
-    private String entryPoint;
   -->
 
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
@@ -66,8 +47,9 @@
         <f:textbox />
     </f:entry>
     <f:entry title="${%VPC}" field="vpc">
-        <f:select default="empty" />
+        <f:textbox/>
     </f:entry>
+    <f:validateButton method="testVpc" title="Validate VPC" with="vpc,credentialId,region" />
     <f:entry title="${%Security Groups}" field="securityGroups">
         <f:textbox/>
     </f:entry>
@@ -78,38 +60,7 @@
     </f:entry>
     <f:validateButton title="Validate Subnets" method="testSubnets" with="subnets,credentialId,vpc,region" />
 
-        <!--   </f:entry>
-         <f:entry title="${%Subnets}" field="subnets">
-              <f:repeatable field="subnets" minimum="1">
-                  <table width="100%">
-                      <f:entry title="${%Name}" field="name">
-                          <f:select />
-                      </f:entry>
-                      <f:entry>
-                          <div align="right">
-                              <f:repeatableDeleteButton />
-                          </div>
-                      </f:entry>
-                  </table>
-              </f:repeatable>
-          </f:entry> -->
-  <!--  <f:entry title="${%Security Groups}" field="securityGroups">
-        <f:repeatable field="securityGroups" minimum="1">
-            <table width="100%">
-                <f:entry title="${%Id}" field="securityGroupId">
-                    <f:select />
-                </f:entry>
-                <f:entry>
-                    <div align="right">
-                        <f:repeatableDeleteButton />
-                    </div>
-                </f:entry>
-            </table>
-        </f:repeatable>
-    </f:entry> -->
-
     <f:advanced>
-
         <f:entry title="${%Override entrypoint}" field="entrypoint">
             <f:textbox />
         </f:entry>

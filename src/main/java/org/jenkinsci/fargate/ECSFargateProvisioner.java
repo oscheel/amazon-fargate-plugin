@@ -29,57 +29,7 @@ import java.util.logging.Logger;
 public class ECSFargateProvisioner extends OneShotProvisioner<ECSFargateSlave> {
 
     private static Logger LOG = Logger.getLogger(ECSFargateProvisioner.class.getName());
-/*
 
-   // @Override
-    public void onEnterBuildable(Queue.BuildableItem bi) {
-        if(bi.task instanceof AbstractProject){
-
-            AbstractProject project = (AbstractProject) bi.task;
-            LOG.log(Level.INFO,"Assigned Label {0}",project.getAssignedLabel());
-            final TaskOverrideLabelProperty labelProperty = (TaskOverrideLabelProperty) project.getProperty(TaskOverrideLabelProperty.class);
-            if(labelProperty != null && labelProperty.isOn() && project.getAssignedLabel() == null){
-                ECSFargateConfig ecsFargateConfig = ECSFargateConfig.getEcsFargateConfig();
-                final ECSFargateTaskDefinition taskDefinition = ecsFargateConfig.getTemplate(labelProperty.getTaskDefinitionName());
-
-                if(taskDefinition != null){
-
-                }else{
-                    //Fail build since template was not found.
-                }
-               // Queue.getInstance().cancel(bi);
-                if(taskDefinition != null) {
-
-                    try {
-                        Node node = ACL.impersonate(ACL.SYSTEM, new Callable<Node, Exception>() {
-                            @Override
-                            public void checkRoles(RoleChecker checker) throws SecurityException {
-
-                            }
-
-                            @Override
-                            public Node call() throws Exception {
-                                Slave node = new ECSFargateSlave(taskDefinition.getName(), taskDefinition.getRemoteFSRoot(), "LabelProperty");
-                            //    node.createComputer();
-                                Jenkins.getActiveInstance().addNode(node);
-                                while (Jenkins.getInstance().getNode(node.getNodeName()) == null) {
-                                    Thread.sleep(1000);
-                                }
-                                LOG.log(Level.INFO, node.getComputer().getJnlpMac());
-
-                                return node;
-                            }
-                        });
-
-                        LOG.log(Level.INFO, "Launched node {0}", node);
-                    } catch (Exception e) {
-                        LOG.log(Level.WARNING, ExceptionUtils.getFullStackTrace(e));
-                    }
-                }
-            }
-        }
-    }
-*/
 
     @Override
     public boolean usesOneShotExecutor(Queue.Item item) {
@@ -112,6 +62,6 @@ public class ECSFargateProvisioner extends OneShotProvisioner<ECSFargateSlave> {
             throw new RuntimeException("Unable to find template for "+buildableItem.getAssignedLabel().toString());
         }
 
-        return  new ECSFargateSlave(buildableItem,"ECS Fargate Node.",taskDefinition.getValue().getRemoteFSRoot());
+        return  new ECSFargateSlave(buildableItem,"ECS Fargate Node.",taskDefinition.getValue().getRemoteFSRoot(),taskDefinition.getKey());
     }
 }
