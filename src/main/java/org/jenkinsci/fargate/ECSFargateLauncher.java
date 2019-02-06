@@ -1,6 +1,9 @@
 package org.jenkinsci.fargate;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.dynamodbv2.xspec.L;
+import com.google.common.util.concurrent.ListenableFuture;
+import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.slaves.ComputerLauncher;
 import hudson.slaves.DelegatingComputerLauncher;
@@ -13,11 +16,15 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.jenkinsci.plugins.oneshot.DeadComputer;
 import org.jenkinsci.plugins.oneshot.OneShotComputer;
 import org.jenkinsci.plugins.oneshot.OneShotComputerLauncher;
+import org.jenkinsci.plugins.workflow.flow.FlowExecution;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+import org.jenkinsci.plugins.workflow.steps.StepExecution;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -48,66 +55,100 @@ public class ECSFargateLauncher extends DelegatingComputerLauncher {
         return command;
     }
 
+
     @Override
     public void launch(SlaveComputer computer, TaskListener listener) throws IOException, InterruptedException {
 
-
+        listener.getLogger().println("Launching Fargate Agent...");
         if(computer.getNode() instanceof ECSFargateSlave){
 
-            LOGGER.log(Level.INFO,"Provisioning Fargate task for this run...");
+            LOGGER.log(Level.INFO, "Provisioning Fargate task for this run...");
+
             ECSFargateConfig ecsFargateConfig = ECSFargateConfig.getEcsFargateConfig();
-            ECSFargateSlave ecsFargateSlave = (ECSFargateSlave)computer.getNode();
+            ECSFargateSlave ecsFargateSlave = (ECSFargateSlave) computer.getNode();
 
-            Pair<ECSCluster,ECSFargateTaskDefinition> clusterToDefPair = ecsFargateConfig.getTemplate(ecsFargateSlave.getTemplateLabel());
+            Pair<ECSCluster, ECSFargateTaskDefinition> clusterToDefPair = ecsFargateConfig.getTemplate(ecsFargateSlave.getTemplateLabel());
 
-            if(clusterToDefPair == null){
+            if (clusterToDefPair == null) {
                 throw new RuntimeException("Unable to find template to launch this slave.");
             }
 
             ECSCluster ecsCluster = clusterToDefPair.getKey();
             ECSFargateTaskDefinition taskDefinition = clusterToDefPair.getValue();
-
-            super.launch(computer, listener);
-
             int retries = 0;
-            CONNECT_LOOP: {
-                while(retries < ecsCluster.getMaxRetries()){
 
-                    LOGGER.log(Level.INFO,"Launching ECS task for item {0} and template {1}.", new Object[]{ecsFargateSlave.getTaskName(),ecsFargateSlave.getTemplateLabel()});
-                    listener.getLogger().println(getDockerRunCommand(ecsFargateSlave,ecsCluster).toString());
+            try {
+
+                super.launch(computer, listener);
+
+
+                CONNECT_LOOP:
+                {
                     ECSService ecsService = new ECSService(ecsCluster.getCredentialId(), ecsCluster.getRegion());
+                    String taskDefArn = ecsService.registerTemplate(ecsCluster, taskDefinition, ecsFargateSlave.getOverrideAction());
+                    while (retries < ecsCluster.getMaxRetries()) {
 
-                    String taskDefArn = ecsService.registerTemplate(ecsCluster,taskDefinition);
-                    try{
-                        String taskArn = ecsService.runEcsTask(ecsFargateSlave,taskDefinition,ecsCluster.getClusterArn(),ecsCluster.getName(),getDockerRunCommand(ecsFargateSlave,ecsCluster),taskDefArn,ecsFargateSlave.getTaskName());
+                        String taskArn = null;
+                        try {
+                            LOGGER.log(Level.INFO, "Launching ECS task for item {0} and template {1}.", new Object[]{ecsFargateSlave.getTaskName(), ecsFargateSlave.getTemplateLabel()});
+
+                          taskArn = ecsService.runEcsTask(ecsFargateSlave,
+                                                                taskDefinition,
+                                                                ecsCluster.getClusterArn(),
+                                                                ecsCluster.getName(),
+                                                                getDockerRunCommand(ecsFargateSlave,ecsCluster),
+                                                                taskDefArn,
+                                                                ecsFargateSlave.getTaskName(),
+                                                                ecsFargateSlave.getOverrideAction());
                         ecsFargateSlave.setTaskArn(taskArn);
-                        Date timeout = new Date(new Date().getTime()+1000*ecsCluster.getSlaveTimeout());
+                            Date timeout = new Date(new Date().getTime() + 1000 * ecsCluster.getSlaveTimeout());
 
-                        while(timeout.after(new Date())){
-                            if (ecsFargateSlave.getComputer() == null || ecsFargateSlave.getComputer() instanceof DeadComputer) {
-                                throw new IllegalStateException(
-                                        "Slave " + ecsFargateSlave.getNodeName() + " - Node was deleted, computer is null");
-                            }
-                            if (!ecsFargateSlave.getComputer().isActuallyOffline()) {
-                                break CONNECT_LOOP;
+                            while (timeout.after(new Date())) {
+                                if (ecsFargateSlave.getComputer() == null || ecsFargateSlave.getComputer() instanceof DeadComputer) {
+                                    throw new IllegalStateException(
+                                            "Slave " + ecsFargateSlave.getNodeName() + " - Node was deleted, computer is null");
+                                }
+                                if (!ecsFargateSlave.getComputer().isActuallyOffline() || ((ECSFargateComputer)ecsFargateSlave.getComputer()).isDead()) {
+                                    break CONNECT_LOOP;
+                                }
+
+                                LOGGER.log(Level.FINE, "Waiting for slave to connect... ");
+                                Thread.sleep(1000);
                             }
 
-                            LOGGER.log(Level.FINE,"Waiting for slave to connect... ");
-                            Thread.sleep(1000);
+
+                        } catch (AmazonServiceException e) {
+                            listener.getLogger().println("A problem occurred while submitting the request for this task " + e.getMessage());
+                            LOGGER.log(Level.WARNING, "A problem occured while submitting a fargate request {0}.", e.getMessage());
+                            LOGGER.log(Level.WARNING, ExceptionUtils.getFullStackTrace(e));
+
+                        }finally {
+                            //Make sure we clean this task even if it fails.
+                            if(taskArn != null && ecsFargateSlave.getComputer().isActuallyOffline()) {
+                                LOGGER.log(Level.INFO,"Slave did not launch in a timely manner, terminating task and incrementing retries.");
+                                ecsService.deleteTask(taskArn, ecsCluster.getClusterArn());
+                            }
                         }
-
-
-                    }catch (AmazonServiceException e){
-                        listener.getLogger().println("A problem occurred while submitting the request for this task "+e.getMessage());
-                        LOGGER.log(Level.WARNING,"A problem occured while submitting a fargate request {0}.",e.getMessage());
-                        LOGGER.log(Level.WARNING, ExceptionUtils.getFullStackTrace(e));
+                        retries++;
                     }
 
-                    retries++;
-                    Thread.sleep(1000);
                 }
-            }
+            }finally{
 
+                ECSFargateComputer ecsFargateComputer = (ECSFargateComputer) computer;
+                if(ecsFargateComputer.isActuallyOffline()) {
+                    try{
+                        LOGGER.log(Level.INFO,"Failed to provision agent, removing from jenkins {0}.",computer);
+                        ecsFargateComputer.terminate(listener);
+                        Jenkins.getInstance().removeNode(ecsFargateSlave);
+                    }catch (Exception e){
+                        LOGGER.log(Level.WARNING, "Failed to disconnect node after failing to provision {0}.",e.getMessage());
+                    }
+
+                }
+
+
+            }
         }
 
     }

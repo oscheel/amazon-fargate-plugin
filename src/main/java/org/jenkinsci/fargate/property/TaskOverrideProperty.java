@@ -4,26 +4,28 @@ import hudson.Extension;
 import hudson.model.*;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
+import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.fargate.ECSCluster;
 import org.jenkinsci.fargate.ECSFargateConfig;
 import org.jenkinsci.fargate.ECSFargateTaskDefinition;
+import org.jenkinsci.fargate.ECSFargateTaskOverrideAction;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
 
 import java.util.List;
 
-public class TaskOverrideLabelProperty extends JobProperty  {
+public class TaskOverrideProperty extends JobProperty  {
 
     private final String taskRoleArn;
     private final String role;
-    private final int memory;
-    private final int cpu;
+    private final String memory;
+    private final String cpu;
     private final String securityGroups;
     private boolean on;
 
     @DataBoundConstructor
-    public TaskOverrideLabelProperty(String taskRoleArn, String role, int memory, int cpu,String securityGroups) {
+    public TaskOverrideProperty(String taskRoleArn, String role, String memory, String cpu, String securityGroups) {
         this.taskRoleArn = taskRoleArn;
         this.role = role;
         this.memory = memory;
@@ -40,11 +42,11 @@ public class TaskOverrideLabelProperty extends JobProperty  {
         return role;
     }
 
-    public int getMemory() {
+    public String getMemory() {
         return memory;
     }
 
-    public int getCpu() {
+    public String getCpu() {
         return cpu;
     }
 
@@ -56,6 +58,11 @@ public class TaskOverrideLabelProperty extends JobProperty  {
     public boolean isOn() {
         return on;
     }
+
+    public ECSFargateTaskOverrideAction getOverrideAction(){
+        return new ECSFargateTaskOverrideAction(getTaskRoleArn(),getMemory(),getCpu(),getSecurityGroups());
+    }
+
 
     @DataBoundSetter
     public void setOn(boolean on) {
@@ -70,6 +77,11 @@ public class TaskOverrideLabelProperty extends JobProperty  {
             return "ECS Fargate Task";
         }
 
+
+
+        public FormValidation doCheckSecurityGroups(@QueryParameter String securityGroups){
+            return ECSFargateTaskDefinition.getDescriptr().doCheckSecurityGroups(securityGroups);
+        }
 
 
         public ListBoxModel doFillMemoryItems(){

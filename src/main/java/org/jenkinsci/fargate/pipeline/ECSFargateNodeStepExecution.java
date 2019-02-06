@@ -22,6 +22,7 @@ import org.acegisecurity.AccessDeniedException;
 import org.acegisecurity.Authentication;
 import org.acegisecurity.context.SecurityContext;
 import org.acegisecurity.context.SecurityContextHolder;
+import org.jenkinsci.fargate.ECSFargateComputer;
 import org.jenkinsci.fargate.ECSFargateTaskOverrideAction;
 import org.jenkinsci.plugins.durabletask.executors.ContinuableExecutable;
 import org.jenkinsci.plugins.durabletask.executors.ContinuedTask;
@@ -49,6 +50,7 @@ import java.io.PrintStream;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static java.util.logging.Level.*;
@@ -60,26 +62,28 @@ public class ECSFargateNodeStepExecution extends AbstractStepExecutionImpl imple
 
     ECSFargateNodeStepExecution(StepContext ctx,ECSFargateNodeStep step){
         super(ctx);
+        LOGGER.log(Level.WARNING,"Context is {0}",ctx);
         this.step = step;
     }
 
     @Override
     public boolean start() throws Exception {
+
+        getContext().get(FlowNode.class).addAction(new ECSFargateTaskOverrideAction(step.getRoleOverride(),
+                step.getMemory(),
+                step.getCpu(),
+                step.getSecurityGroups()));
         final PlaceholderTask task = new PlaceholderTask(getContext(), step.getLabel());
         Queue.WaitingItem waitingItem = Queue.getInstance().schedule2(task, 0).getCreateItem();
+
         if (waitingItem == null) {
             // There can be no duplicates. But could be refused if a QueueDecisionHandler rejects it for some odd reason.
             throw new IllegalStateException("failed to schedule task");
         }
         getContext().get(FlowNode.class).addAction(new QueueItemActionImpl(waitingItem.getId()));
         PrintStream logger = getContext().get(TaskListener.class).getLogger();
-        logger.println("Role is "+step.getRoleOverride());
-        logger.println("CPU is "+step.getCpu());
-        logger.println("Memory is"+step.getMemory());
-        getContext().get(FlowNode.class).addAction(new ECSFargateTaskOverrideAction(step.getRoleOverride(),
-                                                                                    Integer.toString(step.getMemory()),
-                                                                                    Double.toString(step.getCpu()),
-                                                                                    step.getSecurityGroups()));
+
+
 
         Timer.get().schedule(new Runnable() {
             @Override public void run() {
@@ -162,7 +166,7 @@ public class ECSFargateNodeStepExecution extends AbstractStepExecutionImpl imple
             }
         }
         // Whether or not either of the above worked (and they would not if for example our item were canceled), make sure we die.
-        //  super.stop(cause);
+       // getContext().onFailure(cause);
     }
 
     @Override public String getStatus() {
@@ -199,6 +203,7 @@ public class ECSFargateNodeStepExecution extends AbstractStepExecutionImpl imple
 
     }
 
+
     /** Transient handle of a running executor task. */
     private static final class RunningTask {
         /** null until placeholder executable runs */
@@ -206,6 +211,12 @@ public class ECSFargateNodeStepExecution extends AbstractStepExecutionImpl imple
         /** null until placeholder executable runs */
         @Nullable
         Launcher launcher;
+
+        /**
+         * null until node is associate to task.
+         */
+        @Nullable
+        transient String nodeName;
     }
 
     private static final String COOKIE_VAR = "JENKINS_NODE_COOKIE";
@@ -523,8 +534,19 @@ public class ECSFargateNodeStepExecution extends AbstractStepExecutionImpl imple
                     return;
                 }
                 final AsynchronousExecution execution = runningTask.execution;
+
+                if(runningTask.nodeName != null && execution == null && runningTask.launcher == null){
+                    Node node = Jenkins.getInstance().getNode(runningTask.nodeName);
+                    if(node != null){
+                        LOGGER.log(Level.WARNING,"Interrupting before node was provisioned.");
+                        ECSFargateComputer ecsFargateComputer = (ECSFargateComputer)node.toComputer();
+                        ecsFargateComputer.setIsDead(true);
+                    }
+                }
+
                 if (execution == null) {
                     // JENKINS-30759: finished before asynch execution was even scheduled
+                    LOGGER.log(WARNING, "no running task corresponds to {0}", cookie);
                     return;
                 }
                 assert runningTask.launcher != null;
@@ -579,73 +601,97 @@ public class ECSFargateNodeStepExecution extends AbstractStepExecutionImpl imple
         @ExportedBean
         private final class PlaceholderExecutable implements ContinuableExecutable {
 
+
             @Override public void run() {
                 final TaskListener listener;
                 Launcher launcher;
+                Computer computer;
                 final Run<?, ?> r;
                 try {
                     Executor exec = Executor.currentExecutor();
                     if (exec == null) {
                         throw new IllegalStateException("running task without associated executor thread");
                     }
-                    Computer computer = exec.getOwner();
+                    computer = exec.getOwner();
                     // Set up context for other steps inside this one.
                     Node node = computer.getNode();
                     if (node == null) {
                         throw new IllegalStateException("running computer lacks a node");
                     }
-                    listener = context.get(TaskListener.class);
-                    launcher = node.createLauncher(listener);
-                    r = context.get(Run.class);
+
                     if (cookie == null) {
                         // First time around.
                         cookie = UUID.randomUUID().toString();
                         //Skipping this step as wel always need to provision a new node.
                         //label = computer.getName();
 
-                        EnvVars env = computer.getEnvironment();
-                        env.overrideExpandingAll(computer.buildEnvironment(listener));
-                        env.put(COOKIE_VAR, cookie);
-                        // Cf. CoreEnvironmentContributor:
-                        if (exec.getOwner() instanceof Jenkins.MasterComputer) {
-                            env.put("NODE_NAME", "master");
-                        } else {
-                            env.put("NODE_NAME", label);
-                        }
-                        env.put("EXECUTOR_NUMBER", String.valueOf(exec.getNumber()));
-                        env.put("NODE_LABELS", Util.join(node.getAssignedLabels(), " "));
-
                         synchronized (runningTasks) {
-                            runningTasks.put(cookie, new RunningTask());
+                            RunningTask runningTask = new RunningTask();
+                            runningTask.nodeName = computer.getName();
+                            runningTasks.put(cookie, runningTask);
                         }
-                        // For convenience, automatically allocate a workspace, like WorkspaceStep would:
-                        Job<?,?> j = r.getParent();
-                        if (!(j instanceof TopLevelItem)) {
-                            throw new Exception(j + " must be a top-level job");
+                    }else{
+                        synchronized (runningTasks){
+                            RunningTask runningTask = runningTasks.get(cookie);
+                            if(runningTask.nodeName != null || !runningTask.nodeName.equals(computer.getName())){
+                                runningTask.nodeName = computer.getName();
+                            }
                         }
-                        FilePath p = node.getWorkspaceFor((TopLevelItem) j);
-                        if (p == null) {
-                            throw new IllegalStateException(node + " is offline");
-                        }
-                        WorkspaceList.Lease lease = computer.getWorkspaceList().allocate(p);
-                        FilePath workspace = lease.path;
-                        // Cf. AbstractBuild.getEnvironment:
-                        env.put("WORKSPACE", workspace.getRemote());
-                        FlowNode flowNode = context.get(FlowNode.class);
-                        if (flowNode != null) {
-                            flowNode.addAction(new WorkspaceActionImpl(workspace, flowNode));
-                        }
-                        listener.getLogger().println("Running on " + computer.getDisplayName() + " in " + workspace); // TODO hyperlink
-                        context.newBodyInvoker()
-                                .withContexts(exec, computer, env, workspace)
-                                .withCallback(new Callback(cookie, lease))
-                                .start();
-                        LOGGER.log(FINE, "started {0}", cookie);
-                    } else {
-                        // just rescheduled after a restart; wait for task to complete
-                        LOGGER.log(FINE, "resuming {0}", cookie);
                     }
+
+                    r = context.get(Run.class);
+
+                    ECSFargateComputer fargateComputer = (ECSFargateComputer) computer;
+                    fargateComputer.setCookie(cookie);
+                    fargateComputer.setParentRun(r.getExternalizableId());
+                    listener = context.get(TaskListener.class);
+                    launcher = node.createLauncher(listener);
+
+
+                    if(launcher == null){
+                        context.onFailure(new RuntimeException("Agent failed to launch."));
+                        return;
+                    }
+
+                    EnvVars env = computer.getEnvironment();
+                    env.overrideExpandingAll(computer.buildEnvironment(listener));
+                    env.put(COOKIE_VAR, cookie);
+                    // Cf. CoreEnvironmentContributor:
+                    if (exec.getOwner() instanceof Jenkins.MasterComputer) {
+                        env.put("NODE_NAME", "master");
+                    } else {
+                        env.put("NODE_NAME", label);
+                    }
+                    env.put("EXECUTOR_NUMBER", String.valueOf(exec.getNumber()));
+                    env.put("NODE_LABELS", Util.join(node.getAssignedLabels(), " "));
+                    env.put("NODE_PROVISIONED", "true");
+
+                    // For convenience, automatically allocate a workspace, like WorkspaceStep would:
+                    Job<?,?> j = r.getParent();
+                    if (!(j instanceof TopLevelItem)) {
+                        throw new Exception(j + " must be a top-level job");
+                    }
+                    FilePath p = node.getWorkspaceFor((TopLevelItem) j);
+                    if (p == null) {
+                        throw new IllegalStateException(node + " is offline");
+                    }
+                    WorkspaceList.Lease lease = computer.getWorkspaceList().allocate(p);
+                    FilePath workspace = lease.path;
+                    // Cf. AbstractBuild.getEnvironment:
+                    env.put("WORKSPACE", workspace.getRemote());
+                    FlowNode flowNode = context.get(FlowNode.class);
+                    if (flowNode != null) {
+                        flowNode.addAction(new WorkspaceActionImpl(workspace, flowNode));
+                    }
+                    listener.getLogger().println("Running on " + computer.getDisplayName() + " in " + workspace); // TODO hyperlink
+                    context.newBodyInvoker()
+                            .withContexts(exec, computer, env, workspace)
+                            .withCallback(new Callback(cookie, lease))
+                            .start();
+                    LOGGER.log(FINE, "started {0}", cookie);
+
                 } catch (Exception x) {
+
                     context.onFailure(x);
                     return;
                 }
@@ -661,6 +707,7 @@ public class ECSFargateNodeStepExecution extends AbstractStepExecutionImpl imple
                     assert runningTask.launcher == null;
                     runningTask.launcher = launcher;
                     runningTask.execution = new AsynchronousExecution() {
+
                         @Override public void interrupt(boolean forShutdown) {
                             if (forShutdown) {
                                 return;

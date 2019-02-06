@@ -8,10 +8,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import com.amazonaws.Protocol;
 import com.amazonaws.services.ecs.model.*;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
 
@@ -97,7 +99,7 @@ class ECSService {
         }
     }
 
-    ContainerDefinition populateContainerDefintion(final ECSFargateTaskDefinition definition, String familyName, int memory, int cpu){
+    ContainerDefinition populateContainerDefintion(final ECSFargateTaskDefinition definition, String familyName, int memory){
 
         ContainerDefinition def = new ContainerDefinition()
                 .withName(familyName)
@@ -105,9 +107,9 @@ class ECSService {
                 .withEnvironment(definition.getEnvironmentKeyValuePairs())
                 .withExtraHosts(definition.getExtraHostEntries())
                 .withMountPoints(definition.getMountPointEntries())
-/*                .withMemory(memory) */
-                .withCpu(0)
-                .withPrivileged(definition.isPrivileged())
+        //        .withMemory(memory)
+                //Container will always use as much CPU as is available so this doesnt need to be specified unlike memory except in the task definition itself.
+                .withCpu(2)
                 .withEssential(true);
 
         if (!StringUtils.isEmpty(definition.getEntryPoint()))
@@ -136,7 +138,7 @@ class ECSService {
      * @param fargateTaskDefinition - Current fargate task defintion
      * @return
      */
-    boolean matchesSavedDefinition(DescribeTaskDefinitionResult describeTaskDefinition, ContainerDefinition def, ECSFargateTaskDefinition fargateTaskDefinition, int memory, int cpu){
+    boolean matchesSavedDefinition(DescribeTaskDefinitionResult describeTaskDefinition, ContainerDefinition def, ECSFargateTaskDefinition fargateTaskDefinition){
 
         if(describeTaskDefinition == null){
             return false;
@@ -158,9 +160,7 @@ class ECSService {
          }
 
         TaskDefinition taskDefinition = describeTaskDefinition.getTaskDefinition();
-        if(taskDefinition.getCpu().equals(Integer.toString(cpu)) &&
-                taskDefinition.getMemory().equals(Integer.toString(memory)) &&
-                taskDefinition.getExecutionRoleArn().equals(fargateTaskDefinition.getExecutionRoleArn())){
+        if(taskDefinition.getExecutionRoleArn().equals(fargateTaskDefinition.getExecutionRoleArn())){
             LOGGER.log(Level.FINE, "Match on task cpy, memory and execution role: template={0}, taskDefinition={1}", new Object[] {fargateTaskDefinition,taskDefinition});
 
         }else{
@@ -171,17 +171,18 @@ class ECSService {
         return true;
     }
 
+
     /**
      * Looks whether the latest task definition matches the desired one. If yes, returns the ARN of the existing one.
      * If no, register a new task definition with desired parameters and return the new ARN.
      */
-    String registerTemplate(final ECSCluster cluster, final ECSFargateTaskDefinition definition) {
+    String registerTemplate(final ECSCluster cluster, final ECSFargateTaskDefinition definition, ECSFargateTaskOverrideAction overrideAction) {
         final AmazonECSClient client = getAmazonECSClient();
 
-        int memory = (int)(Double.parseDouble(definition.getMemory())*1024);
-        int cpu = (int)(Double.parseDouble(definition.getCpu())*1024);
-        String familyName = fullQualifiedTemplateName(cluster.getName(), definition);
-        final ContainerDefinition def = populateContainerDefintion(definition,familyName,memory,cpu);
+        int memory = (int)(Double.parseDouble(StringUtils.isEmpty(overrideAction.getMemory()) ? definition.getMemory() : overrideAction.getMemory())*1024);
+        int cpu = (int)(Double.parseDouble(StringUtils.isEmpty(overrideAction.getCpu()) ? definition.getCpu() : overrideAction.getCpu())*1024);
+        String familyName = fullQualifiedTemplateName(cluster.getName(), definition, overrideAction);
+        final ContainerDefinition def = populateContainerDefintion(definition,familyName,memory);
 
 
         String lastToken = null;
@@ -200,7 +201,7 @@ class ECSService {
             describeTaskDefinition = client.describeTaskDefinition((new DescribeTaskDefinitionRequest().withTaskDefinition(listTaskDefinitions.getTaskDefinitionArns().get(0))));
         }
 
-        if(matchesSavedDefinition(describeTaskDefinition,def,definition,memory,cpu)) {
+        if(matchesSavedDefinition(describeTaskDefinition,def,definition)) {
             LOGGER.log(Level.FINE, "Task Definition already exists: {0}", new Object[]{describeTaskDefinition.getTaskDefinition().getTaskDefinitionArn()});
             return describeTaskDefinition.getTaskDefinition().getTaskDefinitionArn();
         } else {
@@ -222,18 +223,30 @@ class ECSService {
         }
     }
 
-    private String fullQualifiedTemplateName(final String cluster, final ECSFargateTaskDefinition definition) {
-        return cluster.replaceAll("\\s+","") + '-' + definition.getName();
+    private String fullQualifiedTemplateName(final String cluster, final ECSFargateTaskDefinition definition,ECSFargateTaskOverrideAction ecsFargateTaskOverrideAction) {
+        String memory = StringUtils.isEmpty(ecsFargateTaskOverrideAction.getMemory()) ? definition.getMemory() : ecsFargateTaskOverrideAction.getMemory();
+        String cpu = StringUtils.isEmpty(ecsFargateTaskOverrideAction.getCpu()) ? definition.getCpu() : ecsFargateTaskOverrideAction.getCpu();
+
+        return cluster.replaceAll("\\s+","") + '-' + definition.getName() + "-"+cpu.replace(".","")+"-"+memory.replace(".","");
     }
 
-    private NetworkConfiguration getNetworkConfig(ECSFargateTaskDefinition template){
+    private NetworkConfiguration getNetworkConfig(ECSFargateTaskDefinition template,ECSFargateTaskOverrideAction taskOverride){
+
+        String[] securityGroups = null;
+
+        if(!StringUtils.isEmpty(taskOverride.getSecurityGroups())){
+            securityGroups = (String[])ArrayUtils.addAll(taskOverride.getSecurityGroups().split(","),template.getSecurityGroups().split(","));
+        }else{
+            securityGroups = template.getSecurityGroups().split(",");
+        }
+
         return new NetworkConfiguration().withAwsvpcConfiguration(
                     new AwsVpcConfiguration().withSubnets(template.getSubnets().split(","))
                                              .withAssignPublicIp(AssignPublicIp.ENABLED)
-                                             .withSecurityGroups(template.getSecurityGroups().split(",")));
+                                             .withSecurityGroups(securityGroups));
     }
 
-    String runEcsTask(final ECSFargateSlave slave, final ECSFargateTaskDefinition template, String clusterArn, String clusterName, Collection<String> command, String taskDefinitionArn, String taskName) throws IOException, AbortException {
+    String runEcsTask(final ECSFargateSlave slave, final ECSFargateTaskDefinition template, String clusterArn, String clusterName, Collection<String> command, String taskDefinitionArn, String taskName, ECSFargateTaskOverrideAction overrideAction) throws IOException, AbortException {
         AmazonECSClient client = getAmazonECSClient();
 
         KeyValuePair envNodeName = new KeyValuePair();
@@ -251,13 +264,13 @@ class ECSService {
         final RunTaskResult runTaskResult = client.runTask(new RunTaskRequest()
                 .withTaskDefinition(taskDefinitionArn)
                 .withLaunchType(LaunchType.FARGATE)
-                .withNetworkConfiguration(getNetworkConfig(template))
+                .withNetworkConfiguration(getNetworkConfig(template,overrideAction))
                 .withOverrides(new TaskOverride()
                         .withExecutionRoleArn(template.getExecutionRoleArn())
-                        .withTaskRoleArn(template.getTaskRoleArn())
+                        .withTaskRoleArn(StringUtils.isEmpty(overrideAction.getTaskRoleArn()) ? template.getTaskRoleArn() : overrideAction.getTaskRoleArn())
                         .withContainerOverrides(new ContainerOverride()
                                // .withName(slave.getNodeName())
-                                .withName(fullQualifiedTemplateName(clusterName, template))
+                                .withName(fullQualifiedTemplateName(clusterName, template, overrideAction))
                                 .withCommand(command)
                                 .withEnvironment(envNodeName)
                                 .withEnvironment(envNodeSecret)

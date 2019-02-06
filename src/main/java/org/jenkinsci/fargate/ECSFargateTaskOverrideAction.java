@@ -1,6 +1,7 @@
 package org.jenkinsci.fargate;
 
 import hudson.model.InvisibleAction;
+import org.apache.commons.lang.StringUtils;
 
 import java.io.Serializable;
 
@@ -40,6 +41,7 @@ public class ECSFargateTaskOverrideAction extends InvisibleAction implements Ser
         return securityGroups;
     }
 
+
     @Override
     public String toString() {
         return "ECSFargateTaskOverrideAction{" +
@@ -48,5 +50,26 @@ public class ECSFargateTaskOverrideAction extends InvisibleAction implements Ser
                 ", cpu='" + cpu + '\'' +
                 ", securityGroups='" + securityGroups + '\'' +
                 '}';
+    }
+
+    public String generateString() {
+        StringBuilder sb = new StringBuilder();
+        if(StringUtils.isEmpty(taskRoleArn) && StringUtils.isEmpty(memory) && StringUtils.isEmpty(cpu) && StringUtils.isEmpty(securityGroups)){
+            sb.append("Launching agent from default template...");
+        }
+
+        if(!StringUtils.isEmpty(taskRoleArn)){
+            sb.append("Overriding task role with: "+taskRoleArn+"\n");
+        }
+
+        if(!StringUtils.isEmpty(cpu) || !StringUtils.isEmpty(memory)){
+            sb.append("Overriding memory settings with cpu: "+cpu+"v and memory: "+memory+"GB\n");
+        }
+
+        if(!StringUtils.isEmpty(securityGroups)){
+            sb.append("Adding SGs: "+securityGroups+"\n");
+        }
+
+        return sb.toString();
     }
 }

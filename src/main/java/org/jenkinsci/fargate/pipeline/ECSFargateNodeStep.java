@@ -6,6 +6,8 @@ import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.model.*;
+import hudson.util.ListBoxModel;
+import org.jenkinsci.fargate.ECSFargateTaskDefinition;
 import org.jenkinsci.plugins.workflow.flow.FlowExecution;
 import org.jenkinsci.plugins.workflow.graph.FlowNode;
 import org.jenkinsci.plugins.workflow.steps.Step;
@@ -14,10 +16,12 @@ import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
+import org.kohsuke.stapler.QueryParameter;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import java.io.Serializable;
+import java.util.Map;
 import java.util.Set;
 
 public final class ECSFargateNodeStep extends Step implements Serializable {
@@ -25,8 +29,8 @@ public final class ECSFargateNodeStep extends Step implements Serializable {
 
     private final @CheckForNull String label;
     private String roleOverride;
-    private double cpu;
-    private int memory;
+    private String cpu;
+    private String memory;
     private String securityGroups;
 
     @DataBoundConstructor
@@ -45,21 +49,21 @@ public final class ECSFargateNodeStep extends Step implements Serializable {
         this.roleOverride = roleOverride;
     }
 
-    public double getCpu() {
+    public String getCpu() {
         return cpu;
     }
 
     @DataBoundSetter
-    public void setCpu(double cpu) {
+    public void setCpu(String cpu) {
         this.cpu = cpu;
     }
 
-    public int getMemory() {
+    public String getMemory() {
         return memory;
     }
 
     @DataBoundSetter
-    public void setMemory(int memory) {
+    public void setMemory(String memory) {
         this.memory = memory;
     }
 
@@ -72,7 +76,6 @@ public final class ECSFargateNodeStep extends Step implements Serializable {
         this.securityGroups = securityGroups;
     }
 
-    @CheckForNull
     public String getLabel() {
         return label;
     }
@@ -81,6 +84,8 @@ public final class ECSFargateNodeStep extends Step implements Serializable {
     public StepExecution start(StepContext stepContext) throws Exception {
         return new ECSFargateNodeStepExecution(stepContext,this);
     }
+
+
 
 
     @Extension
@@ -101,6 +106,15 @@ public final class ECSFargateNodeStep extends Step implements Serializable {
             return ImmutableSet.of(Executor.class, Computer.class, FilePath.class, EnvVars.class,
                     // TODO ExecutorStepExecution.PlaceholderExecutable.run does not pass these, but DefaultStepContext infers them from Computer:
                     Node.class, Launcher.class);
+        }
+
+
+        public ListBoxModel doFillMemoryItems(){
+            return  ECSFargateTaskDefinition.getDescriptr().doFillMemoryItems();
+        }
+
+        public ListBoxModel doFillCpuItems(@QueryParameter String memory){
+            return ECSFargateTaskDefinition.getDescriptr().doFillCpuItems(memory);
         }
 
         @Nonnull

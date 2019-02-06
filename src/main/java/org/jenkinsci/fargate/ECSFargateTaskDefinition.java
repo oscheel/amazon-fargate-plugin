@@ -31,14 +31,12 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
     private String image;
     private String cpu;
     private String remoteFSRoot;
-    private boolean priviledged;
     @CheckForNull
     private String logDriver;
     private List<LogDriverOption> logDriverOptions;
     @CheckForNull
     private String jvmArgs;
     private List<MountPointEntry> mountPoints;
-    private boolean privileged;
 
     private List<EnvironmentEntry> environments;
     private List<ExtraHostEntry> extraHosts;
@@ -46,25 +44,33 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
     private String vpc;
     private String subnets;
     private String securityGroups;
+    private boolean autoAssignIp;
 
     @DataBoundConstructor
-    public ECSFargateTaskDefinition(String name,String taskRoleArn, String executionRoleArn, String memory,String cpu, String image, String remoteFSRoot, boolean priviledged, String logDriver, List<LogDriverOption> logDriverOptions, String jvmArgs, List<MountPointEntry> mountPoints, boolean privileged, List<EnvironmentEntry> environments, List<ExtraHostEntry> extraHosts, String entryPoint) {
+    public ECSFargateTaskDefinition(String name,String taskRoleArn, String executionRoleArn, String memory,String cpu, String image, String remoteFSRoot, String logDriver, List<LogDriverOption> logDriverOptions, String jvmArgs, List<MountPointEntry> mountPoints, List<EnvironmentEntry> environments, List<ExtraHostEntry> extraHosts, String entryPoint) {
         this.name = name;
         this.executionRoleArn = executionRoleArn;
         this.taskRoleArn = taskRoleArn;
         this.memory = memory;
         this.image = image;
         this.remoteFSRoot = remoteFSRoot;
-        this.priviledged = priviledged;
         this.logDriver = logDriver;
         this.logDriverOptions = logDriverOptions;
         this.jvmArgs = jvmArgs;
         this.mountPoints = mountPoints;
-        this.privileged = privileged;
         this.environments = environments;
         this.extraHosts = extraHosts;
         this.entryPoint = entryPoint;
         this.cpu=cpu;
+    }
+
+    public boolean isAutoAssignIp() {
+        return autoAssignIp;
+    }
+
+    @DataBoundSetter
+    public void setAutoAssignIp(boolean autoAssignIp) {
+        this.autoAssignIp = autoAssignIp;
     }
 
     public String getTaskRoleArn() {
@@ -134,10 +140,6 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
         return remoteFSRoot;
     }
 
-    public boolean isPriviledged() {
-        return priviledged;
-    }
-
     @CheckForNull
     public String getLogDriver() {
         return logDriver;
@@ -146,10 +148,6 @@ public class ECSFargateTaskDefinition extends AbstractDescribableImpl<ECSFargate
     @CheckForNull
     public String getJvmArgs() {
         return jvmArgs;
-    }
-
-    public boolean isPrivileged() {
-        return privileged;
     }
 
 

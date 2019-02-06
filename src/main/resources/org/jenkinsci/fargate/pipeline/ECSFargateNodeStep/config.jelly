@@ -1,0 +1,19 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form" xmlns:u="/util">
+
+        <f:entry title="Label" field="label">
+            <f:textbox />
+        </f:entry>
+        <f:entry title="Task Role" field="taskRoleArn">
+            <f:textbox />
+        </f:entry>
+        <f:entry title="Memory" field="memory">
+            <f:select default="0.5"/>
+        </f:entry>
+        <f:entry title="CPU" field="cpu">
+            <f:select />
+        </f:entry>
+        <f:entry title="Security Groups" field="securityGroups">
+            <f:textbox/>
+        </f:entry>
+</j:jelly>
